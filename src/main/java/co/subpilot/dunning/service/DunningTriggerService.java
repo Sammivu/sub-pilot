@@ -10,6 +10,7 @@ import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.repository.InvoiceRepository;
 import co.subpilot.invoice.service.InvoiceService;
 import co.subpilot.nomba.NombaPaymentGateway;
+import co.subpilot.notification.service.NotificationService;
 import co.subpilot.payment.entity.PaymentAttempt;
 import co.subpilot.payment.repository.PaymentAttemptRepository;
 import co.subpilot.subscription.entity.Subscription;
@@ -19,8 +20,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,13 +47,10 @@ public class DunningTriggerService {
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final EventService eventService;
     private final NombaPaymentGateway nomba;
-    private final JavaMailSender mailSender;
+    private final NotificationService notificationService;
 
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
-
-    @Value("${subpilot.mail.from}")
-    private String mailFrom;
 
     // ── Start dunning after billing failure ───────────────────────────────────
 
@@ -81,6 +77,12 @@ public class DunningTriggerService {
 
         eventService.emit(sub.getMerchantId(), "dunning.started", "subscription",
                 sub.getId(), Map.of("executionId", execution.getId(), "invoiceId", invoice.getId()));
+
+        // Notify both the subscriber (payment failed, with self-cure link)
+        // and the merchant (PRD §6.9) right away, on the very first failure
+        // — not just at later dunning steps.
+        notificationService.sendPaymentFailed(sub, invoice, latestFailureReason(invoice));
+        notificationService.sendPaymentFailedMerchantAlert(sub, invoice, latestFailureReason(invoice));
 
         log.info("Dunning started: subscription={} execution={}", sub.getId(), execution.getId());
     }
@@ -229,29 +231,33 @@ public class DunningTriggerService {
         log.warn("Dunning exhausted: execution={}", execution.getId());
     }
 
-    private void sendDunningEmail(Subscription sub, Invoice invoice, String template) {
+    /**
+     * Sends the subscriber-facing dunning email for a given step's template.
+     * Days-remaining is computed from the campaign's grace period so the
+     * DUNNING_WARNING template can say "cancelled in N days" accurately
+     * regardless of which step in the sequence this is.
+     */
+    private void sendDunningEmail(Subscription sub, Invoice invoice, String template, DunningExecution execution, DunningCampaign campaign) {
         try {
-            String portalUrl = frontendBaseUrl + "/portal/" + sub.getSubscriptionToken();
-            String subject = switch (template != null ? template : "payment_failed") {
-                case "final_warning" -> "Final warning: Your subscription will be cancelled soon";
-                case "service_suspended" -> "Your subscription has been suspended";
-                default -> "Payment failed for your subscription";
-            };
-            String body = "Your payment of " + (invoice.getAmount() / 100.0) + " NGN failed.\n\n"
-                    + "To update your payment method and keep your subscription active, visit:\n"
-                    + portalUrl + "/update-payment\n\n"
-                    + "SubPilot";
+            long daysElapsed = ChronoUnit.DAYS.between(execution.getStartedAt(), Instant.now());
+            int daysRemaining = (int) Math.max(0, campaign.getGracePeriodDays() - daysElapsed);
 
-            SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setFrom(mailFrom);
-
-            // Get customer email via subscription
-            sub.getCustomerId(); // We'll get the email from customer repo in a real impl
-            // For now, log it — email sending wired separately
-            log.info("Dunning email queued: template={} subscription={}", template, sub.getId());
+            notificationService.sendDunningWarning(sub, daysRemaining);
+            log.info("Dunning email sent: template={} subscription={} daysRemaining={}",
+                    template, sub.getId(), daysRemaining);
         } catch (Exception e) {
-            log.error("Failed to send dunning email for subscription {}: {}", sub.getId(), e.getMessage());
+            log.error("Failed to send dunning email for subscription {}: {}", sub.getId(), e.getMessage(), e);
         }
+    }
+
+    /** Most recent failure reason recorded against an invoice's payment attempts, if any. */
+    private String latestFailureReason(Invoice invoice) {
+        return paymentAttemptRepository.findByInvoiceIdOrderByAttemptedAtDesc(invoice.getId())
+                .stream()
+                .filter(a -> "failed".equals(a.getStatus()))
+                .findFirst()
+                .map(PaymentAttempt::getFailureReason)
+                .orElse(null);
     }
 
     private DunningCampaign createDefaultCampaign(String merchantId) {

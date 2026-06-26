@@ -1,6 +1,7 @@
 package co.subpilot.billing;
 
 import co.subpilot.dunning.service.DunningTriggerService;
+import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
 import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.service.InvoiceService;
@@ -11,6 +12,7 @@ import co.subpilot.plan.entity.Plan;
 import co.subpilot.plan.repository.PlanRepository;
 import co.subpilot.subscription.entity.Subscription;
 import co.subpilot.subscription.enums.SubscriptionStatus;
+import co.subpilot.subscription.SubscriptionStateMachine;
 import co.subpilot.subscription.repository.SubscriptionRepository;
 import co.subpilot.subscription.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
@@ -63,7 +65,8 @@ public class BillingEngineJob {
     public void run() {
         if (!jobEnabled) return;
 
-        List<Subscription> due = subscriptionRepository.findDueForRenewal(Instant.now());
+//        List<Subscription> due = subscriptionRepository.findDueForRenewal(Instant.now());
+        List<Subscription> due = subscriptionRepository.findDueForBilling(Instant.now());
         if (due.isEmpty()) return;
 
         log.info("Billing engine: {} subscriptions due for renewal", due.size());
@@ -158,8 +161,8 @@ public class BillingEngineJob {
         // Advance subscription billing date
         advanceBillingDate(sub, plan, periodEnd);
 
-        eventService.emit(sub.getMerchantId(), "subscription.renewed", "subscription",
-                sub.getId(), Map.of("invoiceId", invoice.getId(), "amount", sub.getMerchantId()));
+        eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_RENEWED, "subscription",
+                sub.getId(), Map.of("invoiceId", invoice.getId(), "amount", plan.getAmount()));
 
         log.info("Renewal succeeded: subscription={} invoice={} ref={}",
                 sub.getId(), invoice.getId(), nombaRef);
@@ -182,7 +185,7 @@ public class BillingEngineJob {
         sub.setStatus(SubscriptionStatus.past_due);
         subscriptionRepository.save(sub);
 
-        eventService.emit(sub.getMerchantId(), "subscription.past_due", "subscription",
+        eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_PAST_DUE, "subscription",
                 sub.getId(), Map.of("invoiceId", invoice.getId(), "failureCode", code != null ? code : ""));
 
         // Start dunning
@@ -197,10 +200,10 @@ public class BillingEngineJob {
         sub.setNextBillingDate(periodEnd);
 
         // Handle cancel_at_period_end
-        if (Boolean.TRUE.equals(sub.isCancelAtPeriodEnd())) {
+        if (Boolean.TRUE.equals(sub.getCancelAtPeriodEnd())) {
             sub.setStatus(SubscriptionStatus.cancelled);
             sub.setCancelledAt(Instant.now());
-            eventService.emit(sub.getMerchantId(), "subscription.cancelled", "subscription",
+            eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_CANCELLED, "subscription",
                     sub.getId(), Map.of("reason", "cancel_at_period_end"));
         }
 

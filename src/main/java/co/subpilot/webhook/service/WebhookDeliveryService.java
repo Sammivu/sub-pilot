@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
@@ -52,6 +54,17 @@ public class WebhookDeliveryService {
             Duration.ofHours(2), Duration.ofHours(8)
     };
     private static final int MAX_ATTEMPTS = BACKOFF_SCHEDULE.length;
+
+    /**
+     * Listens for EventService.EventCreated, firing only after the
+     * surrounding transaction commits successfully (AFTER_COMMIT) — this is
+     * the actual wiring that makes webhook delivery happen. Without this
+     * listener, EventService publishes the event but nothing consumes it.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onEventCreated(EventService.EventCreated eventCreated) {
+        dispatch(eventCreated.event());
+    }
 
     /**
      * Entry point — call this right after writing an Event.

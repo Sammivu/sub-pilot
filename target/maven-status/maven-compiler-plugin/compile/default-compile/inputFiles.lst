@@ -57,9 +57,6 @@
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/NombaAuthTokenManager.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/NombaConfig.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/NombaPaymentGateway.java
-/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/NombaProperties.java
-/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/NombaTransaction.java
-/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/NombaWebClientConfig.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/dto/ChargeData.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/dto/ChargeOrder.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/dto/CheckoutOrderRequest.java
@@ -79,6 +76,17 @@
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/service/NombaAuthService.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/service/NombaGatewayImpl.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/service/NombaWebhookSignatureVerifier.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/EmailProperties.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/EmailTemplateRenderer.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/NotificationConfig.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/entity/NotificationLog.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/enums/EmailTemplate.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/repository/NotificationLogRepository.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/service/BrevoEmailSender.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/service/EmailDispatcher.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/service/EmailSender.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/service/LoggingEmailSender.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/service/NotificationService.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/payment/PaymentAttemptStatus.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/payment/entity/PaymentAttempt.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/payment/repository/PaymentAttemptRepository.java

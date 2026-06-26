@@ -34,13 +34,15 @@ public class InvoiceService {
     private final PlatformFeeService platformFeeService;
 
     /**
-     * Convenience wrapper around generateForPeriod with the simpler signature
-     * used by the billing engine — due date defaults to periodStart, no proration note.
+     * Convenience overload matching the call sites in BillingEngineJob and
+     * SubscriptionService, which only have merchantId/subscriptionId/
+     * customerId/amount/periodStart/periodEnd on hand. Defaults currency to
+     * NGN, dueDate to periodStart, and prorationNote to null. Delegates to
+     * generateForPeriod for the actual idempotent create-or-return logic.
      */
     @Transactional
-    public Invoice createOrFind(
-            String merchantId, String subscriptionId, String customerId,
-            long amount, Instant periodStart, Instant periodEnd) {
+    public Invoice createOrFind(String merchantId, String subscriptionId, String customerId,
+                                long amount, Instant periodStart, Instant periodEnd) {
         return generateForPeriod(merchantId, subscriptionId, customerId, amount, "NGN",
                 periodStart, periodEnd, periodStart, null);
     }
@@ -56,7 +58,8 @@ public class InvoiceService {
     public Invoice generateForPeriod(
             String merchantId, String subscriptionId, String customerId,
             long amount, String currency, Instant periodStart, Instant periodEnd, Instant dueDate,
-            String prorationNote) {
+            String prorationNote
+    ) {
         Optional<Invoice> existing = invoiceRepository.findBySubscriptionIdAndPeriodStart(subscriptionId, periodStart);
         if (existing.isPresent()) {
             return existing.get();
@@ -90,34 +93,36 @@ public class InvoiceService {
      * callers that have a fresh successful charge should use the 2-arg
      * overload below so SubPilot's cut is taken exactly once per invoice.
      */
-//    @Transactional
-//    public Invoice markPaid(String invoiceId) {
-//        Invoice invoice = invoiceRepository.findById(invoiceId)
-//                .orElseThrow(() -> new ResourceNotFoundException("invoice", invoiceId));
-//        if (InvoiceStatus.PAID.equals(invoice.getStatus())) {
-//            return invoice; // idempotent — already paid, e.g. duplicate webhook delivery
-//        }
-//        invoice.setStatus(InvoiceStatus.PAID);
-//        invoice.setPaidAt(Instant.now());
-//        invoice = invoiceRepository.save(invoice);
-//
-//        eventService.recordWithSubscription(invoice.getMerchantId(), EventType.INVOICE_PAID, "invoice", invoice.getId(),
-//                invoice.getSubscriptionId(), Map.of("amount", invoice.getAmount()));
-//
-//        return invoice;
-//    }
+    @Transactional
+    public Invoice markPaid(String invoiceId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("invoice", invoiceId));
+        if (InvoiceStatus.PAID.equals(invoice.getStatus())) {
+            return invoice; // idempotent — already paid, e.g. duplicate webhook delivery
+        }
+        invoice.setStatus(InvoiceStatus.PAID);
+        invoice.setPaidAt(Instant.now());
+        invoice = invoiceRepository.save(invoice);
+
+        eventService.recordWithSubscription(invoice.getMerchantId(), EventType.INVOICE_PAID, "invoice", invoice.getId(),
+                invoice.getSubscriptionId(), Map.of("amount", invoice.getAmount()));
+
+        return invoice;
+    }
 
     /**
-     * Marks an invoice paid AND applies SubPilot's platform fee in the same
-     * transaction. This is the path used by the billing engine and dunning
-     * self-cure recovery — anywhere a PaymentAttempt has just succeeded.
+     * Marks an invoice paid, applies SubPilot's platform fee, and records
+     * which PaymentAttempt produced the charge — giving the platform_fees
+     * ledger row a real traceable link back to the attempt instead of null.
+     * This is the path used by the billing engine, where a PaymentAttempt id
+     * is always on hand.
      *
      * Idempotent: if the invoice is already paid (e.g. the billing job
      * re-runs after a crash but before advancing next_billing_date), the fee
      * is NOT re-applied a second time.
      */
     @Transactional
-    public Invoice markPaid(String invoiceId, String nombaReference) {
+    public Invoice markPaid(String invoiceId, String nombaReference, String paymentAttemptId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("invoice", invoiceId));
 
@@ -133,10 +138,23 @@ public class InvoiceService {
                     invoice.getSubscriptionId(), Map.of("amount", invoice.getAmount(), "nombaReference", nombaReference));
 
             // SubPilot's cut — applied exactly once, only on the transition into "paid".
-            platformFeeService.applyFeeToSuccessfulCharge(invoice, null);
+            platformFeeService.applyFeeToSuccessfulCharge(invoice, paymentAttemptId);
         }
 
         return invoice;
+    }
+
+    /**
+     * Marks an invoice paid and applies SubPilot's platform fee, without a
+     * known PaymentAttempt id (e.g. the subscriber-checkout activation path,
+     * where the charge happened inside Nomba's hosted checkout rather than
+     * through PaymentService). The fee ledger row will have a null
+     * payment_attempt_id in this case — everything else is identical to the
+     * 3-arg overload above.
+     */
+    @Transactional
+    public Invoice markPaid(String invoiceId, String nombaReference) {
+        return markPaid(invoiceId, nombaReference, null);
     }
 
     @Transactional

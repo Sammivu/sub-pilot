@@ -1,6 +1,7 @@
 package co.subpilot.payment.entity;
 
 import co.subpilot.payment.PaymentAttemptStatus;
+import com.github.f4b6a3.ulid.UlidCreator;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -74,7 +75,7 @@ public class PaymentAttempt {
     @PrePersist
     private void ensureId() {
         if (id == null) {
-            id = com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString();
+            id = UlidCreator.getMonotonicUlid().toString();
         }
     }
 }

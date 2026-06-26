@@ -1,4 +1,3 @@
-
 package co.subpilot.subscription.service;
 
 import co.subpilot.common.exception.BusinessRuleException;
