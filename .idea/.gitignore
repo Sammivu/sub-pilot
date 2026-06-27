@@ -4,7 +4,6 @@
 # Environment
 .env
 
-src/main/java/co/subpilot/nomba/**
 # Maven
 target/
 

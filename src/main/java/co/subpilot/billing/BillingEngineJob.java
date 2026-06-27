@@ -6,6 +6,7 @@ import co.subpilot.event.service.EventService;
 import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.service.InvoiceService;
 import co.subpilot.nomba.NombaPaymentGateway;
+import co.subpilot.notification.service.NotificationService;
 import co.subpilot.payment.entity.PaymentAttempt;
 import co.subpilot.payment.repository.PaymentAttemptRepository;
 import co.subpilot.plan.entity.Plan;
@@ -56,6 +57,7 @@ public class BillingEngineJob {
     private final NombaPaymentGateway nomba;
     private final SubscriptionService subscriptionService;
     private final DunningTriggerService dunningTriggerService;
+    private final NotificationService notificationService;
 
     @Value("${subpilot.billing.job-enabled:true}")
     private boolean jobEnabled;
@@ -65,7 +67,6 @@ public class BillingEngineJob {
     public void run() {
         if (!jobEnabled) return;
 
-//        List<Subscription> due = subscriptionRepository.findDueForRenewal(Instant.now());
         List<Subscription> due = subscriptionRepository.findDueForBilling(Instant.now());
         if (due.isEmpty()) return;
 
@@ -163,6 +164,9 @@ public class BillingEngineJob {
 
         eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_RENEWED, "subscription",
                 sub.getId(), Map.of("invoiceId", invoice.getId(), "amount", plan.getAmount()));
+
+        // PRD §6.9: subscriber gets a receipt email on every successful renewal charge.
+        notificationService.sendPaymentSucceeded(sub, invoice);
 
         log.info("Renewal succeeded: subscription={} invoice={} ref={}",
                 sub.getId(), invoice.getId(), nombaRef);

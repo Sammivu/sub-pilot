@@ -5,11 +5,11 @@ import java.util.Map;
 /**
  * Abstraction over the transactional email provider.
  *
- * Mirrors the NombaPaymentGateway pattern: a real implementation
- * (BrevoEmailSender) and a no-op/logging implementation (LoggingEmailSender)
- * both implement this interface, selected via subpilot.email.enabled and
- * subpilot.notification.brevo-api-key being present. Callers (NotificationService)
- * never know which one is active.
+ * BrevoEmailSender is the sole implementation. When no Brevo API key is
+ * configured it falls back internally to logging the intended send rather
+ * than calling the real API — see BrevoEmailSender for details. This keeps
+ * a single bean in play at all times (no @ConditionalOnProperty bean-split,
+ * which previously risked two competing beans on a blank-but-present key).
  */
 public interface EmailSender {
 

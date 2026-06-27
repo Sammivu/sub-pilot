@@ -2,8 +2,6 @@
 
 Recurring billing infrastructure for African businesses — built on Nomba payment primitives.
 
-Nomba Forward Hackathon 2026 — Subscriptions Engine track.
-
 ---
 
 ## Tech Stack
@@ -125,6 +123,10 @@ co.subpilot/
 ## Frontend
 
 The React frontend lives at: https://github.com/AgiriTaofeek/sub-pilot
+
+Expected on Netlify at: https://sub-pilot.netlify.app
+
+or
 
 Expected on Netlify at: https://subpilot.netlify.app
 

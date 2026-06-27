@@ -9,6 +9,7 @@ import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
 import co.subpilot.invoice.service.InvoiceService;
 import co.subpilot.nomba.NombaPaymentGateway;
+import co.subpilot.notification.service.NotificationService;
 import co.subpilot.plan.entity.Plan;
 import co.subpilot.plan.repository.PlanRepository;
 import co.subpilot.subscription.BillingPeriodCalculator;
@@ -40,6 +41,7 @@ public class SubscriptionService {
     private final InvoiceService invoiceService;
     private final EventService eventService;
     private final NombaPaymentGateway nomba;
+    private final NotificationService notificationService;
 
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
@@ -142,6 +144,11 @@ public class SubscriptionService {
         eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_ACTIVATED, "subscription",
                 sub.getId(), Map.of("planId", sub.getPlanId()));
 
+        // PRD §6.9: subscriber gets "subscription activated", merchant gets
+        // "new subscriber acquired" — both fire from the same activation event.
+        notificationService.sendSubscriptionActivated(sub);
+        notificationService.sendNewSubscriberAlert(sub);
+
         log.info("Subscription activated: {} via checkout", subscriptionId);
     }
 
@@ -170,6 +177,10 @@ public class SubscriptionService {
         Subscription saved = subscriptionRepository.save(sub);
         eventService.emit(merchantId, EventType.SUBSCRIPTION_CANCELLED, "subscription",
                 sub.getId(), Map.of("reason", reason != null ? reason : "", "immediate", immediate));
+
+        notificationService.sendSubscriptionCancelled(saved, reason);
+        notificationService.sendSubscriptionCancelledMerchantAlert(saved, reason);
+
         log.info("Subscription cancelled: {} immediate={}", subscriptionId, immediate);
         return saved;
     }

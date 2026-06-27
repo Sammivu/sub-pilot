@@ -146,7 +146,7 @@ public class DunningTriggerService {
 
         // ── Send email ─────────────────────────────────────────────────────
         if (("send_email".equals(step.getAction()) || "both".equals(step.getAction())) && !chargeSucceeded) {
-            sendDunningEmail(sub, invoice, step.getEmailTemplate());
+            sendDunningEmail(sub, invoice, step.getEmailTemplate(), execution, campaign);
         }
 
         eventService.emit(sub.getMerchantId(), "dunning.step_executed", "subscription",
@@ -226,6 +226,9 @@ public class DunningTriggerService {
                 subscriptionRepository.save(sub);
                 eventService.emit(sub.getMerchantId(), "dunning.exhausted", "subscription",
                         sub.getId(), Map.of("executionId", execution.getId()));
+
+                // PRD §6.9: merchant alert when dunning fully exhausts without recovery.
+                notificationService.sendDunningExhaustedMerchantAlert(sub);
             });
         }
         log.warn("Dunning exhausted: execution={}", execution.getId());

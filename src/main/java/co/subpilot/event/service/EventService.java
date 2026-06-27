@@ -80,8 +80,7 @@ public class EventService {
      * Kept separate from record()/recordWithSubscription() so call sites reading
      * "emit an event" stay readable; behaviour is identical.
      */
-    public Event emit(String merchantId, String type, String resourceType, String resourceId,
-                      Map<String, Object> payload) {
+    public Event emit(String merchantId, String type, String resourceType, String resourceId, Map<String, Object> payload) {
         return record(merchantId, type, resourceType, resourceId, payload);
     }
 
