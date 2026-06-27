@@ -73,7 +73,6 @@
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/dto/TransactionData.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/dto/VerificationResponse.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/dto/VerifyTransactionResponse.java
-/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/service/NombaAuthService.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/service/NombaGatewayImpl.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/nomba/service/NombaWebhookSignatureVerifier.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/notification/EmailProperties.java
@@ -99,6 +98,7 @@
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/entity/Plan.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/repository/PlanRepository.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/service/PlanService.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/entity/ProrationRecord.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/subscription/BillingPeriodCalculator.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/subscription/SubscriptionStateMachine.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/subscription/controller/SubscriptionController.java

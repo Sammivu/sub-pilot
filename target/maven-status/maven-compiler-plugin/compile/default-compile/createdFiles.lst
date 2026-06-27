@@ -1,6 +1,5 @@
 co/subpilot/auth/service/AuthService.class
 co/subpilot/auth/entity/ApiKey.class
-co/subpilot/SubPilotApplication.class
 co/subpilot/merchant/entity/Merchant$MerchantBuilder.class
 co/subpilot/auth/dto/AuthDtos$LoginRequest.class
 co/subpilot/auth/entity/User.class
@@ -19,4 +18,3 @@ co/subpilot/auth/repository/UserRepository.class
 co/subpilot/auth/dto/AuthDtos$AuthResponse.class
 co/subpilot/auth/dto/AuthDtos.class
 co/subpilot/auth/security/AuthFilter.class
-co/subpilot/auth/controller/AuthController.class
