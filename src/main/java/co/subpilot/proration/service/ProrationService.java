@@ -75,6 +75,23 @@ public class ProrationService {
         Subscription sub = subscriptionRepository.findByIdAndMerchantId(subscriptionId, merchantId)
                 .orElseThrow(() -> new ResourceNotFoundException("subscription", subscriptionId));
 
+        return changePlanResolved(sub, merchantId, newPlanId);
+    }
+
+    /**
+     * Portal variant — the subscriber has already been authenticated by
+     * possession of their opaque subscription_token, so the Subscription is
+     * passed in already-resolved rather than looked up via TenantContext
+     * (which portal requests never populate, since there's no merchant JWT
+     * on a token-based request).
+     */
+    @Transactional
+    public ProrationDtos.ChangePlanResponse changePlanViaPortal(Subscription sub, String newPlanId) {
+        return changePlanResolved(sub, sub.getMerchantId(), newPlanId);
+    }
+
+    private ProrationDtos.ChangePlanResponse changePlanResolved(Subscription sub, String merchantId, String newPlanId) {
+
         // Plan changes only make sense for a subscription currently being
         // billed normally. A trialing subscription hasn't started a paid
         // cycle yet (nothing to prorate against); past_due/paused/

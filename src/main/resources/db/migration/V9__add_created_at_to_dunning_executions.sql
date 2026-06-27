@@ -1,0 +1,2 @@
+ALTER TABLE dunning_executions
+ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();

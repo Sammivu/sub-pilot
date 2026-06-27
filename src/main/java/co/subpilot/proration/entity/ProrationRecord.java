@@ -16,10 +16,10 @@ import java.time.Instant;
  * a change happened; this records the financial detail of it).
  *
  * Does NOT extend BaseEntity: the proration_records table (V4 migration) has
- * only an `applied_at` timestamp, not the created_at/updated_at pair every
- * other BaseEntity subclass relies on. A proration record is also a
- * point-in-time fact, never updated after creation, so a separate
- * updated_at would be meaningless here anyway.
+ * no updated_at column, and a proration record is genuinely immutable —
+ * there's nothing to "update" after it's written, so an updated_at column
+ * would never be touched anyway. id and appliedAt are declared directly to
+ * match the schema exactly.
  */
 @Getter
 @Setter
@@ -63,7 +63,7 @@ public class ProrationRecord {
     @Column(name = "invoice_id")
     private String invoiceId;
 
-    @Column(name = "applied_at", nullable = false)
+    @Column(name = "applied_at", nullable = false, updatable = false)
     private Instant appliedAt;
 
     @PrePersist

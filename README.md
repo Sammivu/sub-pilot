@@ -27,8 +27,8 @@ Recurring billing infrastructure for African businesses — built on Nomba payme
 ```bash
 git clone https://github.com/your-org/subpilot-backend.git
 cd subpilot-backend
-cp .env.example .env
-# Edit .env — defaults work for local dev as-is
+cp .env.example .env.example
+# Edit .env.example — defaults work for local dev as-is
 ```
 
 ### 2. Start infrastructure

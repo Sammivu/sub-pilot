@@ -17,7 +17,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "subpilot.email.brevo-api-key", matchIfMissing = true)
+//@ConditionalOnProperty(name = "subpilot.email.brevo-api-key", matchIfMissing = true)
 public class LoggingEmailSender implements EmailSender {
 
     @Override

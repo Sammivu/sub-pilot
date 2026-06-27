@@ -6,6 +6,7 @@ import co.subpilot.notification.enums.EmailTemplate;
 import co.subpilot.notification.repository.NotificationLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +30,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EmailDispatcher {
 
-    private final EmailSender emailSender;
+    private final @Qualifier("brevoEmailSender") EmailSender emailSender;
     private final NotificationLogRepository notificationLogRepository;
 
     @Async("asyncExecutor")

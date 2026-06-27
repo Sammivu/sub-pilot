@@ -98,6 +98,8 @@
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/entity/Plan.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/repository/PlanRepository.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/service/PlanService.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/portal/controller/PortalController.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/portal/dto/PortalDtos.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/ProrationCalculator.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/dto/ProrationDtos.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/entity/ProrationRecord.java

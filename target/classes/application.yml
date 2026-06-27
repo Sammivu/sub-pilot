@@ -55,7 +55,7 @@ subpilot:
 
   # JWT
   jwt:
-    secret: ${JWT_SECRET:this-is-a-dev-secret-change-it-in-production-min-256-bits}
+    secret: ${JWT_SECRET:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c}
     expiration-ms: 86400000        # 24 hours
 
   # Nomba Integration
@@ -74,7 +74,7 @@ subpilot:
     default-bps: ${PLATFORM_FEE_BPS:150}            # 150 bps = 1.5%
     default-fixed-minor: ${PLATFORM_FEE_FIXED_MINOR:10000}  # ₦100.00 in kobo
     min-fee-minor: ${PLATFORM_FEE_MIN_MINOR:0}       # optional floor per transaction
-    max-fee-minor: ${PLATFORM_FEE_MAX_MINOR:}        # optional cap per transaction (blank = no cap)
+    max-fee-minor: ${PLATFORM_FEE_MAX_MINOR:0}        # optional cap per transaction (blank = no cap/0)
 
   # Frontend URLs (for email links, CORS)
   frontend:

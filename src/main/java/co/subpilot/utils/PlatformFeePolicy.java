@@ -36,7 +36,7 @@ public class PlatformFeePolicy {
     @Value("${subpilot.fees.min-fee-minor:0}")
     private long minFeeMinor;
 
-    @Value("#{${subpilot.fees.max-fee-minor:null}}")
+    @Value("${subpilot.fees.max-fee-minor}")
     private Long maxFeeMinor; // nullable — no cap if unset
 
     public FeeBreakdown calculate(Merchant merchant, long grossAmount) {
@@ -62,7 +62,7 @@ public class PlatformFeePolicy {
         if (fee < minFeeMinor) {
             fee = minFeeMinor;
         }
-        if (maxFeeMinor != null && fee > maxFeeMinor) {
+        if (maxFeeMinor > 0 && fee > maxFeeMinor) {
             fee = maxFeeMinor;
         }
         // Never let the fee exceed the gross amount (avoids negative payouts on tiny charges)

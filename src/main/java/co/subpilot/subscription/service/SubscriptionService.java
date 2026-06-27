@@ -158,7 +158,26 @@ public class SubscriptionService {
     public Subscription cancel(String subscriptionId, String reason, boolean immediate) {
         String merchantId = TenantContext.requireMerchantId();
         Subscription sub = requireSubscription(subscriptionId, merchantId);
+        return cancelResolved(sub, reason, immediate);
+    }
 
+    /**
+     * Portal variant — the subscriber has already been authenticated by
+     * possession of their opaque subscription_token (see getByToken), so no
+     * merchant JWT/TenantContext is involved. The resolved Subscription is
+     * passed in directly rather than re-resolving by (id, merchantId), since
+     * the portal controller already has it from getByToken().
+     */
+    @Transactional
+    public Subscription cancelViaPortal(Subscription sub, String reason) {
+        // Portal-initiated cancellations are always "at period end" — PRD
+        // §6.7 describes a self-service cancel, not an immediate forced
+        // termination. Immediate cancellation (cutting off access right
+        // away) stays an operator-only action via the console endpoint.
+        return cancelResolved(sub, reason, false);
+    }
+
+    private Subscription cancelResolved(Subscription sub, String reason, boolean immediate) {
         if (sub.isTerminal()) {
             throw new co.subpilot.common.exception.InvalidStateTransitionException(
                     sub.getStatus().name(), SubscriptionStatus.cancelled.name());
@@ -175,13 +194,13 @@ public class SubscriptionService {
         }
 
         Subscription saved = subscriptionRepository.save(sub);
-        eventService.emit(merchantId, EventType.SUBSCRIPTION_CANCELLED, "subscription",
+        eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_CANCELLED, "subscription",
                 sub.getId(), Map.of("reason", reason != null ? reason : "", "immediate", immediate));
 
         notificationService.sendSubscriptionCancelled(saved, reason);
         notificationService.sendSubscriptionCancelledMerchantAlert(saved, reason);
 
-        log.info("Subscription cancelled: {} immediate={}", subscriptionId, immediate);
+        log.info("Subscription cancelled: {} immediate={}", sub.getId(), immediate);
         return saved;
     }
 

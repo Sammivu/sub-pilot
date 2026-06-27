@@ -2,7 +2,7 @@
 /shelf/
 /workspace.xml
 # Environment
-.env
+.env.example
 
 # Maven
 target/
