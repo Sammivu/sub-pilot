@@ -10,7 +10,6 @@ import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.entity.InvoiceSequence;
 import co.subpilot.invoice.repository.InvoiceRepository;
 import co.subpilot.invoice.repository.InvoiceSequenceRepository;
-import com.github.f4b6a3.ulid.UlidCreator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +32,8 @@ public class InvoiceService {
     private final EventService eventService;
     private final PlatformFeeService platformFeeService;
 
+    private static final String PRORATION_DEDUP_PREFIX = "dedup:";
+
     /**
      * Convenience overload matching the call sites in BillingEngineJob and
      * SubscriptionService, which only have merchantId/subscriptionId/
@@ -45,6 +46,53 @@ public class InvoiceService {
                                 long amount, Instant periodStart, Instant periodEnd) {
         return generateForPeriod(merchantId, subscriptionId, customerId, amount, "NGN",
                 periodStart, periodEnd, periodStart, null);
+    }
+
+    /**
+     * Idempotent invoice creation keyed by an explicit, caller-supplied
+     * dedup key rather than periodStart — used by ProrationService, where
+     * periodStart is "now" (the moment of the plan-change call) and
+     * therefore cannot serve as a stable dedup key the way it does for
+     * regular billing-cycle invoices in generateForPeriod().
+     *
+     * The dedup key is stored in invoice.prorationNote's leading segment
+     * (see PRORATION_DEDUP_PREFIX) so a retried "change plan" request with
+     * the same dedupKey returns the original invoice instead of creating a
+     * second one and double-charging the customer.
+     */
+    @Transactional
+    public Invoice generateForProrationDedupKey(
+            String merchantId, String subscriptionId, String customerId,
+            long amount, String currency, Instant periodStart, Instant periodEnd, Instant dueDate,
+            String dedupKey, String humanNote
+    ) {
+        String taggedNote = PRORATION_DEDUP_PREFIX + dedupKey + "|" + humanNote;
+
+        Optional<Invoice> existing = invoiceRepository
+                .findBySubscriptionIdAndProrationNoteStartingWith(subscriptionId, PRORATION_DEDUP_PREFIX + dedupKey + "|");
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        Invoice invoice = new Invoice();
+        invoice.setMerchantId(merchantId);
+        invoice.setSubscriptionId(subscriptionId);
+        invoice.setCustomerId(customerId);
+        invoice.setInvoiceNumber(nextInvoiceNumber(merchantId));
+        invoice.setAmount(amount);
+        invoice.setCurrency(currency);
+        invoice.setStatus(InvoiceStatus.PENDING);
+        invoice.setDueDate(dueDate);
+        invoice.setPeriodStart(periodStart);
+        invoice.setPeriodEnd(periodEnd);
+        invoice.setProrationNote(taggedNote);
+
+        invoice = invoiceRepository.save(invoice);
+
+        eventService.recordWithSubscription(merchantId, EventType.INVOICE_CREATED, "invoice", invoice.getId(),
+                subscriptionId, Map.of("amount", amount, "invoiceNumber", invoice.getInvoiceNumber()));
+
+        return invoice;
     }
 
     /**

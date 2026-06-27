@@ -80,6 +80,15 @@ public class PlanController {
         return archive(id);
     }
 
+    // Note: the public, unauthenticated plan-details endpoint
+    // (GET /v1/public/plans/:merchantSlug/:planSlug) lives in
+    // SubscriptionController, not here — this controller has a class-level
+    // @RequestMapping("/v1/plans") prefix, so a method here can't expose an
+    // absolute /v1/public/... path without Spring concatenating both
+    // prefixes into something wrong. SubscriptionController already has no
+    // class-level mapping and hosts the matching public checkout endpoint,
+    // so the two public plan-page routes stay together there.
+
     private PlanDtos.PlanResponse toResponse(Plan plan, String merchantId) {
         String merchantSlug = merchantRepository.findById(merchantId)
                 .map(Merchant::getSlug)

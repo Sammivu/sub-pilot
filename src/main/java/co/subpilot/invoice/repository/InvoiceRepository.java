@@ -22,12 +22,18 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
 
     // Analytics: sum of paid invoices per merchant
     @Query("SELECT COALESCE(SUM(i.amount), 0) FROM Invoice i " +
-           "WHERE i.merchantId = :merchantId AND i.status = 'paid' AND i.paidAt >= :since")
+            "WHERE i.merchantId = :merchantId AND i.status = 'paid' AND i.paidAt >= :since")
     Long sumPaidSince(String merchantId, Instant since);
 
     // Count failed invoices
     long countByMerchantIdAndStatus(String merchantId, String status);
-    
+
     boolean existsBySubscriptionIdAndPeriodStart(String subscriptionId, Instant periodStart);
+
+    // For proration idempotency: dedup by a caller-supplied key tagged onto
+    // prorationNote, since periodStart is "now" for proration invoices and
+    // therefore unusable as a stable dedup key the way it is for regular
+    // billing-cycle invoices.
+    Optional<Invoice> findBySubscriptionIdAndProrationNoteStartingWith(String subscriptionId, String prefix);
 
 }

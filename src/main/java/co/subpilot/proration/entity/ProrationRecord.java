@@ -16,11 +16,10 @@ import java.time.Instant;
  * a change happened; this records the financial detail of it).
  *
  * Does NOT extend BaseEntity: the proration_records table (V4 migration) has
- * a single applied_at timestamp rather than BaseEntity's created_at/updated_at
- * pair — this is an append-only record (one row per plan change, never
- * updated afterwards), so a separate "last modified" column would be
- * meaningless. id is generated the same way BaseEntity does (ULID via
- * @PrePersist) for consistency with the rest of the codebase.
+ * only an `applied_at` timestamp, not the created_at/updated_at pair every
+ * other BaseEntity subclass relies on. A proration record is also a
+ * point-in-time fact, never updated after creation, so a separate
+ * updated_at would be meaningless here anyway.
  */
 @Getter
 @Setter

@@ -67,6 +67,7 @@ public class BillingEngineJob {
     public void run() {
         if (!jobEnabled) return;
 
+//        List<Subscription> due = subscriptionRepository.findDueForRenewal(Instant.now());
         List<Subscription> due = subscriptionRepository.findDueForBilling(Instant.now());
         if (due.isEmpty()) return;
 
@@ -204,7 +205,7 @@ public class BillingEngineJob {
         sub.setNextBillingDate(periodEnd);
 
         // Handle cancel_at_period_end
-        if (Boolean.TRUE.equals(sub.getCancelAtPeriodEnd())) {
+        if (Boolean.TRUE.equals(sub.isCancelAtPeriodEnd())) {
             sub.setStatus(SubscriptionStatus.cancelled);
             sub.setCancelledAt(Instant.now());
             eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_CANCELLED, "subscription",

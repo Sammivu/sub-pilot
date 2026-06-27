@@ -98,7 +98,11 @@
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/entity/Plan.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/repository/PlanRepository.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/plan/service/PlanService.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/ProrationCalculator.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/dto/ProrationDtos.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/entity/ProrationRecord.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/repository/ProrationRecordRepository.java
+/Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/proration/service/ProrationService.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/subscription/BillingPeriodCalculator.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/subscription/SubscriptionStateMachine.java
 /Users/gamp/IdeaProjects/subpilot-backend/src/main/java/co/subpilot/subscription/controller/SubscriptionController.java

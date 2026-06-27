@@ -66,5 +66,12 @@ public class PlanDtos {
             String merchantName,
             String merchantSlug,
             String planSlug
-    ) {}
+    ) {
+        public static PublicPlanResponse from(Plan plan, String merchantName, String merchantSlug) {
+            return new PublicPlanResponse(
+                    plan.getName(), plan.getDescription(), plan.getAmount(), plan.getCurrency(),
+                    plan.getBillingInterval(), plan.getTrialDays(), merchantName, merchantSlug, plan.getSlug()
+            );
+        }
+    }
 }

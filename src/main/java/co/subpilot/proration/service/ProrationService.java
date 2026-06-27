@@ -129,7 +129,7 @@ public class ProrationService {
                 // is no "difference" to charge on a downgrade, only credit
                 // to carry forward via the next invoice's proration_note.
                 if (isUpgrade && calc.netChargeToday() > 0) {
-                    Invoice invoice = chargeProrationNow(sub, newPlan, calc.netChargeToday(), now);
+                    Invoice invoice = chargeProrationNow(sub, oldPlan, newPlan, calc.netChargeToday(), now);
                     invoiceIdForRecord = invoice.getId();
                     chargedImmediately = InvoiceStatus.PAID.equals(invoice.getStatus());
                     paymentStatus = chargedImmediately ? "charged" : "charge_failed";
@@ -148,7 +148,7 @@ public class ProrationService {
                 // policy name refers to always settling now, not always
                 // being a debit.
                 if (calc.netChargeToday() > 0) {
-                    Invoice invoice = chargeProrationNow(sub, newPlan, calc.netChargeToday(), now);
+                    Invoice invoice = chargeProrationNow(sub, oldPlan, newPlan, calc.netChargeToday(), now);
                     invoiceIdForRecord = invoice.getId();
                     chargedImmediately = InvoiceStatus.PAID.equals(invoice.getStatus());
                     paymentStatus = chargedImmediately ? "charged" : "charge_failed";
@@ -200,16 +200,32 @@ public class ProrationService {
      * idempotent PaymentService.charge() path as regular billing, keyed to
      * this specific invoice, so a duplicate plan-change request (e.g. a
      * retried API call) never double charges.
+     *
+     * The invoice itself is deduplicated by an explicit key derived from
+     * (subscriptionId, oldPlanId, newPlanId, currentPeriodStart) — NOT by
+     * "now", since two retries of the same logical plan-change request
+     * land at different instants and "now" would defeat idempotency at the
+     * exact moment it matters most (a double-submitted upgrade click).
+     * The dedup key changes only when the subscriber makes a genuinely
+     * different change (different plan pair) or the cycle rolls over.
      */
-    private Invoice chargeProrationNow(Subscription sub, Plan newPlan, long amount, Instant now) {
+    private Invoice chargeProrationNow(Subscription sub, Plan oldPlan, Plan newPlan, long amount, Instant now) {
         Customer customer = customerRepository.findById(sub.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
 
-        Invoice invoice = invoiceService.generateForPeriod(
+        String dedupKey = "proration:" + sub.getId() + ":" + oldPlan.getId() + ":" + newPlan.getId()
+                + ":" + sub.getCurrentPeriodStart();
+
+        Invoice invoice = invoiceService.generateForProrationDedupKey(
                 sub.getMerchantId(), sub.getId(), sub.getCustomerId(),
-                amount, newPlan.getCurrency(), now, sub.getCurrentPeriodEnd(), now,
-                "Proration charge for upgrade to " + newPlan.getName()
+                amount, newPlan.getCurrency(), sub.getCurrentPeriodStart(), sub.getCurrentPeriodEnd(), now,
+                dedupKey, "Proration charge for upgrade to " + newPlan.getName()
         );
+
+        // Invoice already settled by an earlier attempt at this exact change — nothing more to do.
+        if (InvoiceStatus.PAID.equals(invoice.getStatus()) || InvoiceStatus.FAILED.equals(invoice.getStatus())) {
+            return invoice;
+        }
 
         if (sub.getNombaCardTokenRef() == null) {
             invoiceService.markFailed(invoice.getId());
@@ -217,7 +233,11 @@ public class ProrationService {
             return invoice;
         }
 
-        String idempotencyKey = "proration:" + sub.getId() + ":" + invoice.getId();
+        // Payment-level idempotency key is derived from the SAME dedup key as
+        // the invoice, so the two layers of idempotency stay in lockstep —
+        // a retried request resolves to the same invoice AND the same
+        // payment attempt, not just one or the other.
+        String idempotencyKey = dedupKey + ":" + invoice.getId();
 
         PaymentAttempt attempt = paymentService.charge(
                 sub.getMerchantId(), invoice.getId(), sub.getId(),
