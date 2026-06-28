@@ -139,6 +139,11 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
 
     </dependencies>
 
@@ -154,6 +159,22 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <!--
+                Explicit -parameters flag, rather than relying on it being on
+                by default. This makes constructor-injection parameter names
+                and any @Query method that binds by parameter name (instead
+                of an explicit @Param) resolve correctly regardless of IDE or
+                CI compiler defaults — the exact failure mode behind the
+                "required a single bean, but 2 were found ... missing
+                parameter name information" class of startup error.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <parameters>true</parameters>
                 </configuration>
             </plugin>
         </plugins>

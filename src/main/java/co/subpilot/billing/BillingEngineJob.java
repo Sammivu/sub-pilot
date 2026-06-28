@@ -11,6 +11,7 @@ import co.subpilot.payment.entity.PaymentAttempt;
 import co.subpilot.payment.repository.PaymentAttemptRepository;
 import co.subpilot.plan.entity.Plan;
 import co.subpilot.plan.repository.PlanRepository;
+import co.subpilot.subscription.BillingPeriodCalculator;
 import co.subpilot.subscription.entity.Subscription;
 import co.subpilot.subscription.enums.SubscriptionStatus;
 import co.subpilot.subscription.SubscriptionStateMachine;
@@ -62,91 +63,90 @@ public class BillingEngineJob {
     @Value("${subpilot.billing.job-enabled:true}")
     private boolean jobEnabled;
 
-//    @Scheduled(fixedDelayString = "${subpilot.billing.interval-ms:300000}")
-//    @SchedulerLock(name = "billing_engine", lockAtLeastFor = "PT4M", lockAtMostFor = "PT10M")
-//    public void run() {
-//        if (!jobEnabled) return;
-//
-////        List<Subscription> due = subscriptionRepository.findDueForRenewal(Instant.now());
-//        List<Subscription> due = subscriptionRepository.findDueForBilling(Instant.now());
-//        if (due.isEmpty()) return;
-//
-//        log.info("Billing engine: {} subscriptions due for renewal", due.size());
-//        int succeeded = 0, failed = 0;
-//
-//        for (Subscription sub : due) {
-//            try {
-//                processRenewal(sub);
-//                succeeded++;
-//            } catch (Exception e) {
-//                log.error("Billing error for subscription {}: {}", sub.getId(), e.getMessage(), e);
-//                failed++;
-//            }
-//        }
-//        log.info("Billing engine complete — succeeded={} failed={}", succeeded, failed);
-//    }
-//
-//    @Transactional
-//    public void processRenewal(Subscription sub) {
-//        Plan plan = planRepository.findById(sub.getPlanId())
-//                .orElseThrow(() -> new RuntimeException("Plan not found: " + sub.getPlanId()));
-//
-//        Instant periodStart = sub.getNextBillingDate();
-//        Instant periodEnd = subscriptionService.calculatePeriodEnd(periodStart, plan);
-//
-//        // ── Idempotency check ──────────────────────────────────────────────
-//        String idempotencyKey = sub.getId() + ":" + periodStart.getEpochSecond();
-//        var existingAttempt = paymentAttemptRepository.findByIdempotencyKey(idempotencyKey);
-//        if (existingAttempt.isPresent() && existingAttempt.get().isTerminal()) {
-//            log.debug("Skipping duplicate billing for subscription {} (idempotency key already resolved)", sub.getId());
-//            return;
-//        }
-//
-//        // ── Create invoice ─────────────────────────────────────────────────
-//        Invoice invoice = invoiceService.createOrFind(
-//                sub.getMerchantId(), sub.getId(), sub.getCustomerId(),
-//                plan.getAmount(), periodStart, periodEnd);
-//
-//        if (invoice.isPaid()) {
-//            log.debug("Invoice already paid for subscription {} period {}", sub.getId(), periodStart);
-//            advanceBillingDate(sub, plan, periodEnd);
-//            return;
-//        }
-//
-//        // ── Create payment attempt ─────────────────────────────────────────
-//        String cardToken = sub.getNombaCardTokenRef();
-//        if (cardToken == null || cardToken.isBlank()) {
-//            log.warn("No card token for subscription {} — cannot charge", sub.getId());
-//            handleFailure(sub, invoice, null, "no_card_token", "No payment method on file.");
-//            return;
-//        }
-//
-//        PaymentAttempt newAttempt = new PaymentAttempt();
-//        newAttempt.setId(com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString());
-//        newAttempt.setMerchantId(sub.getMerchantId());
-//        newAttempt.setInvoiceId(invoice.getId());
-//        newAttempt.setSubscriptionId(sub.getId());
-//        newAttempt.setIdempotencyKey(idempotencyKey);
-//        newAttempt.setAmount(plan.getAmount());
-//        newAttempt.setCurrency(plan.getCurrency());
-//        newAttempt.setStatus("processing");
-//        PaymentAttempt attempt = paymentAttemptRepository.save(newAttempt);
-//
-//        // ── Call Nomba Charge API ──────────────────────────────────────────
-//        NombaPaymentGateway.ChargeResponse charge = nomba.chargeToken(
-//                new NombaPaymentGateway.ChargeRequest(
-//                        cardToken, idempotencyKey, plan.getAmount(),
-//                        plan.getCurrency(), sub.getMerchantId(),
-//                        sub.getId(), invoice.getId()
-//                )
-//        );
-//
-//        if (charge.success()) {
-//            handleSuccess(sub, invoice, attempt, charge.reference(), plan, periodEnd);
-//        } else {
-//            handleFailure(sub, invoice, attempt, charge.failureCode(), charge.failureReason());
-//        }
-//    }
+    @Scheduled(fixedDelayString = "${subpilot.billing.interval-ms:300000}")
+    @SchedulerLock(name = "billing_engine", lockAtLeastFor = "PT4M", lockAtMostFor = "PT10M")
+    public void run() {
+        if (!jobEnabled) return;
+
+        List<Subscription> due = subscriptionRepository.findDueForRenewal(Instant.now());
+        if (due.isEmpty()) return;
+
+        log.info("Billing engine: {} subscriptions due for renewal", due.size());
+        int succeeded = 0, failed = 0;
+
+        for (Subscription sub : due) {
+            try {
+                processRenewal(sub);
+                succeeded++;
+            } catch (Exception e) {
+                log.error("Billing error for subscription {}: {}", sub.getId(), e.getMessage(), e);
+                failed++;
+            }
+        }
+        log.info("Billing engine complete — succeeded={} failed={}", succeeded, failed);
+    }
+
+    @Transactional
+    public void processRenewal(Subscription sub) {
+        Plan plan = planRepository.findById(sub.getPlanId())
+                .orElseThrow(() -> new RuntimeException("Plan not found: " + sub.getPlanId()));
+
+        Instant periodStart = sub.getNextBillingDate();
+        Instant periodEnd = BillingPeriodCalculator.addInterval(periodStart, plan);
+
+        // ── Idempotency check ──────────────────────────────────────────────
+        String idempotencyKey = sub.getId() + ":" + periodStart.getEpochSecond();
+        var existingAttempt = paymentAttemptRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingAttempt.isPresent() && existingAttempt.get().isTerminal()) {
+            log.debug("Skipping duplicate billing for subscription {} (idempotency key already resolved)", sub.getId());
+            return;
+        }
+
+        // ── Create invoice ─────────────────────────────────────────────────
+        Invoice invoice = invoiceService.createOrFind(
+                sub.getMerchantId(), sub.getId(), sub.getCustomerId(),
+                plan.getAmount(), periodStart, periodEnd);
+
+        if (invoice.isPaid()) {
+            log.debug("Invoice already paid for subscription {} period {}", sub.getId(), periodStart);
+            advanceBillingDate(sub, plan, periodEnd);
+            return;
+        }
+
+        // ── Create payment attempt ─────────────────────────────────────────
+        String cardToken = sub.getNombaCardTokenRef();
+        if (cardToken == null || cardToken.isBlank()) {
+            log.warn("No card token for subscription {} — cannot charge", sub.getId());
+            handleFailure(sub, invoice, null, "no_card_token", "No payment method on file.");
+            return;
+        }
+
+        PaymentAttempt newAttempt = new PaymentAttempt();
+        newAttempt.setId(com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString());
+        newAttempt.setMerchantId(sub.getMerchantId());
+        newAttempt.setInvoiceId(invoice.getId());
+        newAttempt.setSubscriptionId(sub.getId());
+        newAttempt.setIdempotencyKey(idempotencyKey);
+        newAttempt.setAmount(plan.getAmount());
+        newAttempt.setCurrency(plan.getCurrency());
+        newAttempt.setStatus("processing");
+        PaymentAttempt attempt = paymentAttemptRepository.save(newAttempt);
+
+        // ── Call Nomba Charge API ──────────────────────────────────────────
+        NombaPaymentGateway.ChargeResponse charge = nomba.chargeToken(
+                new NombaPaymentGateway.ChargeRequest(
+                        cardToken, idempotencyKey, plan.getAmount(),
+                        plan.getCurrency(), sub.getMerchantId(),
+                        sub.getId(), invoice.getId()
+                )
+        );
+
+        if (charge.success()) {
+            handleSuccess(sub, invoice, attempt, charge.reference(), plan, periodEnd);
+        } else {
+            handleFailure(sub, invoice, attempt, charge.failureCode(), charge.failureReason());
+        }
+    }
 
     private void handleSuccess(Subscription sub, Invoice invoice, PaymentAttempt attempt,
                                String nombaRef, Plan plan, Instant periodEnd) {
@@ -187,6 +187,7 @@ public class BillingEngineJob {
         invoiceService.markFailed(invoice.getId());
 
         // Move subscription to past_due
+        SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.past_due);
         sub.setStatus(SubscriptionStatus.past_due);
         subscriptionRepository.save(sub);
 
@@ -206,6 +207,7 @@ public class BillingEngineJob {
 
         // Handle cancel_at_period_end
         if (Boolean.TRUE.equals(sub.isCancelAtPeriodEnd())) {
+            SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.cancelled);
             sub.setStatus(SubscriptionStatus.cancelled);
             sub.setCancelledAt(Instant.now());
             eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_CANCELLED, "subscription",

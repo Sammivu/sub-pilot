@@ -12,6 +12,7 @@ Recurring billing infrastructure for African businesses — built on Nomba payme
 - Redis (distributed locks, rate limiting)
 - Flyway (database migrations)
 - ShedLock (prevents duplicate billing job runs)
+- OpenApi Swagger Docs (http://localhost:8080/api/swagger-ui/index.html and http://localhost:8080/api/v3/api-docs)
 
 ---
 

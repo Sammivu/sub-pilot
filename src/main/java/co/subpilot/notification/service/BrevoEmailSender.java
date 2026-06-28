@@ -38,7 +38,6 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "subpilot.email.enabled", havingValue = "true", matchIfMissing = true)
 public class BrevoEmailSender implements EmailSender {
 
     private final WebClient webClient;

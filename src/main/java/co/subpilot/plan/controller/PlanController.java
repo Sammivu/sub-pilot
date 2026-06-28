@@ -6,6 +6,10 @@ import co.subpilot.merchant.repository.MerchantRepository;
 import co.subpilot.plan.dto.PlanDtos;
 import co.subpilot.plan.entity.Plan;
 import co.subpilot.plan.service.PlanService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Maps to /app/plans and /app/plans/:id in the frontend.
  */
+@Tag(name = "Plans", description = "Subscription plan management")
 @RestController
 @RequestMapping("/v1/plans")
 @RequiredArgsConstructor
@@ -28,6 +33,11 @@ public class PlanController {
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
 
+    @Operation(summary = "Create Plan", description = "Creates a new subscription plan")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Plan created"),
+            @ApiResponse(responseCode = "400", description = "Validation failed")
+    })
     @PostMapping
     public ResponseEntity<PlanDtos.PlanResponse> create(@Valid @RequestBody PlanDtos.CreatePlanRequest req) {
         String merchantId = TenantContext.requireMerchantId();
@@ -35,6 +45,11 @@ public class PlanController {
         return ResponseEntity.ok(toResponse(plan, merchantId));
     }
 
+    @Operation(summary = "Get list Plan", description = "Get list of  subscription plans")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Plan created"),
+            @ApiResponse(responseCode = "400", description = "Validation failed")
+    })
     @GetMapping
     public ResponseEntity<Page<PlanDtos.PlanResponse>> list(
             @RequestParam(defaultValue = "0") int page,

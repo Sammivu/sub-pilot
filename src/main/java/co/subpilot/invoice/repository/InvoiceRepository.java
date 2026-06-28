@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,7 +24,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
     // Analytics: sum of paid invoices per merchant
     @Query("SELECT COALESCE(SUM(i.amount), 0) FROM Invoice i " +
             "WHERE i.merchantId = :merchantId AND i.status = 'paid' AND i.paidAt >= :since")
-    Long sumPaidSince(String merchantId, Instant since);
+    Long sumPaidSince(@Param("merchantId") String merchantId, @Param("since") Instant since);
 
     // Count failed invoices
     long countByMerchantIdAndStatus(String merchantId, String status);

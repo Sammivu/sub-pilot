@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface WebhookEndpointRepository extends JpaRepository<WebhookEndpoint, String> {
-    List<WebhookEndpoint> findByMerchantIdAndIsActiveTrue(String merchantId);
     Optional<WebhookEndpoint> findByIdAndMerchantId(String id, String merchantId);
     Page<WebhookEndpoint> findByMerchantId(String merchantId, Pageable pageable);
 

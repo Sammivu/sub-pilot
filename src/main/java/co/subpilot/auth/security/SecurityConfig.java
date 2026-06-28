@@ -38,6 +38,8 @@ public class SecurityConfig {
                         .requestMatchers("/v1/portal/**").permitAll()
                         // Inbound Nomba webhooks
                         .requestMatchers(HttpMethod.POST, "/v1/webhooks/nomba").permitAll()
+                        //Swagger
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // Actuator
                         .requestMatchers("/actuator/health").permitAll()
                         // Everything else requires auth

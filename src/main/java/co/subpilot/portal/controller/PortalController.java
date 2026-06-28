@@ -42,7 +42,7 @@ import java.util.List;
  * for the slim, hand-picked projections used instead of raw entities.
  */
 @RestController
-@RequestMapping("/v1/portal/{token}")
+@RequestMapping("/v1/portal/{subscriptionToken}")
 @RequiredArgsConstructor
 public class PortalController {
 
