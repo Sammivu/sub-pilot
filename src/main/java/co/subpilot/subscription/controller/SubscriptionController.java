@@ -1,5 +1,7 @@
 package co.subpilot.subscription.controller;
 
+import co.subpilot.audit.AuditAction;
+import co.subpilot.audit.service.AuditLogService;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
@@ -27,6 +29,7 @@ public class SubscriptionController {
     private final PlanService planService;
     private final ProrationService prorationService;
     private final MerchantRepository merchantRepository;
+    private final AuditLogService auditLogService;
 
     // ── Console (authenticated) ───────────────────────────────────────────────
 
@@ -51,24 +54,40 @@ public class SubscriptionController {
             @RequestBody(required = false) SubscriptionDtos.CancelRequest req) {
         String reason = req != null ? req.reason() : null;
         boolean immediate = req == null || req.immediate();
-        return ResponseEntity.ok(subscriptionService.cancel(subscriptionId, reason, immediate));
+        Subscription before = subscriptionService.getById(subscriptionId);
+        Subscription after = subscriptionService.cancel(subscriptionId, reason, immediate);
+        auditLogService.record(after.getMerchantId(), AuditAction.SUBSCRIPTION_CANCELLED,
+                "subscription", subscriptionId, before.getStatus(), after.getStatus());
+        return ResponseEntity.ok(after);
     }
 
     @PostMapping("/v1/subscriptions/{subscriptionId}/pause")
     public ResponseEntity<Subscription> pause(@PathVariable String subscriptionId) {
-        return ResponseEntity.ok(subscriptionService.pause(subscriptionId));
+        Subscription before = subscriptionService.getById(subscriptionId);
+        Subscription after = subscriptionService.pause(subscriptionId);
+        auditLogService.record(after.getMerchantId(), AuditAction.SUBSCRIPTION_PAUSED,
+                "subscription", subscriptionId, before.getStatus(), after.getStatus());
+        return ResponseEntity.ok(after);
     }
 
     @PostMapping("/v1/subscriptions/{subscriptionId}/resume")
     public ResponseEntity<Subscription> resume(@PathVariable String subscriptionId) {
-        return ResponseEntity.ok(subscriptionService.resume(subscriptionId));
+        Subscription before = subscriptionService.getById(subscriptionId);
+        Subscription after = subscriptionService.resume(subscriptionId);
+        auditLogService.record(after.getMerchantId(), AuditAction.SUBSCRIPTION_RESUMED,
+                "subscription", subscriptionId, before.getStatus(), after.getStatus());
+        return ResponseEntity.ok(after);
     }
 
     @PostMapping("/v1/subscriptions/{subscriptionId}/change-plan")
     public ResponseEntity<ProrationDtos.ChangePlanResponse> changePlan(
             @PathVariable String subscriptionId,
             @Valid @RequestBody ProrationDtos.ChangePlanRequest req) {
-        return ResponseEntity.ok(prorationService.changePlan(subscriptionId, req.newPlanId()));
+        Subscription before = subscriptionService.getById(subscriptionId);
+        ProrationDtos.ChangePlanResponse result = prorationService.changePlan(subscriptionId, req.newPlanId());
+        auditLogService.record(before.getMerchantId(), AuditAction.SUBSCRIPTION_PLAN_CHANGED,
+                "subscription", subscriptionId, before.getPlanId(), req.newPlanId());
+        return ResponseEntity.ok(result);
     }
 
     // ── Public hosted checkout (no auth — subscriber-facing, PRD §6.4) ────────

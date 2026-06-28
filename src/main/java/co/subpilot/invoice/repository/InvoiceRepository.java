@@ -26,8 +26,22 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
             "WHERE i.merchantId = :merchantId AND i.status = 'paid' AND i.paidAt >= :since")
     Long sumPaidSince(@Param("merchantId") String merchantId, @Param("since") Instant since);
 
+    /**
+     * For the "Revenue over time" chart — every paid invoice in a window,
+     * ordered chronologically, so the caller buckets into daily/weekly/
+     * monthly points without a separate query per bucket. Mirrors
+     * SubscriptionRepository.findCreatedSinceOrderByCreatedAtAsc.
+     */
+    @Query("SELECT i FROM Invoice i WHERE i.merchantId = :merchantId AND i.status = 'paid' " +
+            "AND i.paidAt >= :since ORDER BY i.paidAt ASC")
+    List<Invoice> findPaidSinceOrderByPaidAtAsc(@Param("merchantId") String merchantId, @Param("since") Instant since);
+
     // Count failed invoices
     long countByMerchantIdAndStatus(String merchantId, String status);
+
+    // Value of currently-failed invoices (PRD §6.8: "Failed Payments — count and value")
+    @Query("SELECT COALESCE(SUM(i.amount), 0) FROM Invoice i WHERE i.merchantId = :merchantId AND i.status = 'failed'")
+    long sumFailedAmount(@Param("merchantId") String merchantId);
 
     boolean existsBySubscriptionIdAndPeriodStart(String subscriptionId, Instant periodStart);
 
