@@ -1,5 +1,7 @@
 package co.subpilot.webhook.controller;
 
+import co.subpilot.audit.AuditAction;
+import co.subpilot.audit.service.AuditLogService;
 import co.subpilot.common.tenant.TenantContext;
 import co.subpilot.invoice.repository.InvoiceRepository;
 import co.subpilot.invoice.service.InvoiceService;
@@ -12,6 +14,7 @@ import co.subpilot.webhook.entity.WebhookDelivery;
 import co.subpilot.webhook.entity.WebhookEndpoint;
 import co.subpilot.webhook.repository.WebhookDeliveryRepository;
 import co.subpilot.webhook.repository.WebhookEndpointRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,7 @@ public class WebhookController {
     private final InvoiceService invoiceService;
     private final NombaPaymentGateway nomba;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
 
     /**
      * Only present when subpilot.nomba.mock-mode=false. In mock mode this is
@@ -68,6 +72,10 @@ public class WebhookController {
         endpoint.setSigningSecretHash(secret);
         endpoint = endpointRepository.save(endpoint);
 
+        auditLogService.recordCreation(merchantId, AuditAction.WEBHOOK_ENDPOINT_CREATED,
+                "webhook_endpoint", endpoint.getId(),
+                Map.of("url", endpoint.getUrl(), "events", endpoint.getSubscribedEvents()));
+
         return ResponseEntity.ok(endpoint);
     }
 
@@ -84,7 +92,12 @@ public class WebhookController {
     public ResponseEntity<Map<String, String>> deleteEndpoint(@PathVariable String endpointId) {
         String merchantId = TenantContext.requireMerchantId();
         endpointRepository.findByIdAndMerchantId(endpointId, merchantId)
-                .ifPresent(endpointRepository::delete);
+                .ifPresent(endpoint -> {
+                    auditLogService.recordDeletion(merchantId, AuditAction.WEBHOOK_ENDPOINT_DELETED,
+                            "webhook_endpoint", endpointId,
+                            Map.of("url", endpoint.getUrl(), "events", endpoint.getSubscribedEvents()));
+                    endpointRepository.delete(endpoint);
+                });
         return ResponseEntity.ok(Map.of("message", "Endpoint removed."));
     }
 
@@ -121,7 +134,7 @@ public class WebhookController {
         }
 
         if (realSignatureVerifier != null) {
-            com.fasterxml.jackson.databind.JsonNode jsonNode = objectMapper.valueToTree(event);
+            JsonNode jsonNode = objectMapper.valueToTree(event);
             signatureValid = realSignatureVerifier.verify(jsonNode, timestamp, signature);
         } else {
             signatureValid = nomba.verifyWebhookSignature(rawPayload, signature);

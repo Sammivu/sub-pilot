@@ -1,5 +1,7 @@
 package co.subpilot.plan.controller;
 
+import co.subpilot.audit.AuditAction;
+import co.subpilot.audit.service.AuditLogService;
 import co.subpilot.common.tenant.TenantContext;
 import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
@@ -9,7 +11,6 @@ import co.subpilot.plan.service.PlanService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Maps to /app/plans and /app/plans/:id in the frontend.
  */
-@Tag(name = "Plans", description = "Subscription plan management")
 @RestController
 @RequestMapping("/v1/plans")
 @RequiredArgsConstructor
@@ -29,6 +29,7 @@ public class PlanController {
 
     private final PlanService planService;
     private final MerchantRepository merchantRepository;
+    private final AuditLogService auditLogService;
 
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
@@ -42,12 +43,14 @@ public class PlanController {
     public ResponseEntity<PlanDtos.PlanResponse> create(@Valid @RequestBody PlanDtos.CreatePlanRequest req) {
         String merchantId = TenantContext.requireMerchantId();
         Plan plan = planService.create(merchantId, req);
+        auditLogService.recordCreation(merchantId, AuditAction.PLAN_CREATED, "plan", plan.getId(),
+                toResponse(plan, merchantId));
         return ResponseEntity.ok(toResponse(plan, merchantId));
     }
 
     @Operation(summary = "Get list Plan", description = "Get list of  subscription plans")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Plan created"),
+            @ApiResponse(responseCode = "201", description = "Plan retrieved"),
             @ApiResponse(responseCode = "400", description = "Validation failed")
     })
     @GetMapping
@@ -71,22 +74,31 @@ public class PlanController {
     public ResponseEntity<PlanDtos.PlanResponse> update(
             @PathVariable String id, @Valid @RequestBody PlanDtos.UpdatePlanRequest req) {
         String merchantId = TenantContext.requireMerchantId();
+        PlanDtos.PlanResponse before = toResponse(planService.getOwned(merchantId, id), merchantId);
         Plan plan = planService.update(merchantId, id, req);
-        return ResponseEntity.ok(toResponse(plan, merchantId));
+        PlanDtos.PlanResponse after = toResponse(plan, merchantId);
+        auditLogService.record(merchantId, AuditAction.PLAN_UPDATED, "plan", id, before, after);
+        return ResponseEntity.ok(after);
     }
 
     @PostMapping("/{id}/publish")
     public ResponseEntity<PlanDtos.PlanResponse> publish(@PathVariable String id) {
         String merchantId = TenantContext.requireMerchantId();
+        PlanDtos.PlanResponse before = toResponse(planService.getOwned(merchantId, id), merchantId);
         Plan plan = planService.publish(merchantId, id);
-        return ResponseEntity.ok(toResponse(plan, merchantId));
+        PlanDtos.PlanResponse after = toResponse(plan, merchantId);
+        auditLogService.record(merchantId, AuditAction.PLAN_PUBLISHED, "plan", id, before, after);
+        return ResponseEntity.ok(after);
     }
 
     @PostMapping("/{id}/archive")
     public ResponseEntity<PlanDtos.PlanResponse> archive(@PathVariable String id) {
         String merchantId = TenantContext.requireMerchantId();
+        PlanDtos.PlanResponse before = toResponse(planService.getOwned(merchantId, id), merchantId);
         Plan plan = planService.archive(merchantId, id);
-        return ResponseEntity.ok(toResponse(plan, merchantId));
+        PlanDtos.PlanResponse after = toResponse(plan, merchantId);
+        auditLogService.record(merchantId, AuditAction.PLAN_ARCHIVED, "plan", id, before, after);
+        return ResponseEntity.ok(after);
     }
 
     // DELETE maps to archive per PRD §10 ("DELETE archives a plan")
