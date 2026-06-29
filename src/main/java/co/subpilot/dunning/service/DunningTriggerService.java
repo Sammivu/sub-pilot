@@ -5,6 +5,7 @@ import co.subpilot.dunning.entity.DunningExecution;
 import co.subpilot.dunning.entity.DunningStep;
 import co.subpilot.dunning.repository.DunningCampaignRepository;
 import co.subpilot.dunning.repository.DunningExecutionRepository;
+import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
 import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.repository.InvoiceRepository;
@@ -13,6 +14,7 @@ import co.subpilot.nomba.NombaPaymentGateway;
 import co.subpilot.notification.service.NotificationService;
 import co.subpilot.payment.entity.PaymentAttempt;
 import co.subpilot.payment.repository.PaymentAttemptRepository;
+import co.subpilot.subscription.SubscriptionStateMachine;
 import co.subpilot.subscription.entity.Subscription;
 import co.subpilot.subscription.enums.SubscriptionStatus;
 import co.subpilot.subscription.repository.SubscriptionRepository;
@@ -113,6 +115,23 @@ public class DunningTriggerService {
 
         List<DunningStep> steps = campaign.getSteps();
         Instant failureStart = execution.getStartedAt();
+        boolean gracePeriodElapsed = Instant.now().isAfter(failureStart.plus(campaign.getGracePeriodDays(), ChronoUnit.DAYS));
+
+        // Grace period elapsing is checked independently of step exhaustion —
+        // a subscription moves to 'suspended' the moment grace period ends,
+        // even if dunning steps are still scheduled to run afterwards. This
+        // is the explicit, webhook-visible signal (subscription.suspended)
+        // that downstream product teams should cut off access — see V8
+        // migration / SubscriptionStateMachine for the full rationale.
+        //
+        // We still keep retrying/emailing on schedule after suspension (a
+        // suspended subscription is NOT dunning-exhausted — it only becomes
+        // exhausted once every step has run AND grace period has passed),
+        // so self-cure and scheduled retries both continue to work exactly
+        // as before; only the subscription's reported status changes.
+        if (gracePeriodElapsed) {
+            suspendIfNotAlready(execution);
+        }
 
         // Find the next step due to execute
         for (DunningStep step : steps) {
@@ -125,10 +144,37 @@ public class DunningTriggerService {
             return;
         }
 
-        // All steps executed — check if grace period expired
-        if (Instant.now().isAfter(failureStart.plus(campaign.getGracePeriodDays(), ChronoUnit.DAYS))) {
+        // All steps executed AND grace period has passed — now truly exhausted.
+        if (gracePeriodElapsed) {
             exhaustDunning(execution, campaign);
         }
+    }
+
+    /**
+     * Transitions the subscription to 'suspended' the first time grace
+     * period elapses for this execution. Idempotent — safe to call on every
+     * scheduler pass for the remaining lifetime of the execution, since it
+     * no-ops once the subscription is already past 'past_due' in the state
+     * machine (e.g. already suspended, or already resolved/cancelled by a
+     * concurrent self-cure).
+     */
+    private void suspendIfNotAlready(DunningExecution execution) {
+        subscriptionRepository.findById(execution.getSubscriptionId()).ifPresent(sub -> {
+            if (sub.getStatus() != SubscriptionStatus.past_due) {
+                return; // already suspended, or moved on (recovered/cancelled) since this check last ran
+            }
+            SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.suspended);
+            sub.setStatus(SubscriptionStatus.suspended);
+            subscriptionRepository.save(sub);
+
+            eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_SUSPENDED, "subscription",
+                    sub.getId(), Map.of("executionId", execution.getId()));
+
+            notificationService.sendSubscriptionSuspended(sub);
+
+            log.info("Subscription suspended (grace period elapsed): subscription={} execution={}",
+                    sub.getId(), execution.getId());
+        });
     }
 
     private void executeStep(DunningExecution execution, DunningStep step, DunningCampaign campaign) {
@@ -203,6 +249,7 @@ public class DunningTriggerService {
         execution.setResolvedAt(Instant.now());
         executionRepository.save(execution);
 
+        SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.active);
         sub.setStatus(SubscriptionStatus.active);
         subscriptionRepository.save(sub);
         invoiceService.markPaid(invoice.getId(), "dunning_recovery");
@@ -218,19 +265,26 @@ public class DunningTriggerService {
         execution.setResolvedAt(Instant.now());
         executionRepository.save(execution);
 
-        if (campaign.getCancelAfterExhaustion()) {
-            subscriptionRepository.findById(execution.getSubscriptionId()).ifPresent(sub -> {
-                sub.setStatus(SubscriptionStatus.cancelled);
+        subscriptionRepository.findById(execution.getSubscriptionId()).ifPresent(sub -> {
+            SubscriptionStatus target = Boolean.TRUE.equals(campaign.getCancelAfterExhaustion())
+                    ? SubscriptionStatus.cancelled
+                    : SubscriptionStatus.expired;
+
+            SubscriptionStateMachine.assertCanTransition(sub.getStatus(), target);
+            sub.setStatus(target);
+            if (target == SubscriptionStatus.cancelled) {
                 sub.setCancelledAt(Instant.now());
                 sub.setCancellationReason("dunning_exhausted");
-                subscriptionRepository.save(sub);
-                eventService.emit(sub.getMerchantId(), "dunning.exhausted", "subscription",
-                        sub.getId(), Map.of("executionId", execution.getId()));
+            }
+            subscriptionRepository.save(sub);
 
-                // PRD §6.9: merchant alert when dunning fully exhausts without recovery.
-                notificationService.sendDunningExhaustedMerchantAlert(sub);
-            });
-        }
+            eventService.emit(sub.getMerchantId(), "dunning.exhausted", "subscription",
+                    sub.getId(), Map.of("executionId", execution.getId(), "outcome", target.name()));
+
+            // PRD §6.9: merchant alert when dunning fully exhausts without recovery.
+            notificationService.sendDunningExhaustedMerchantAlert(sub);
+        });
+
         log.warn("Dunning exhausted: execution={}", execution.getId());
     }
 

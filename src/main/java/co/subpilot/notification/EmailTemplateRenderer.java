@@ -57,6 +57,17 @@ public final class EmailTemplateRenderer {
                     <p><a href="{{selfCureUrl}}" style="color:#4f46e5;">Update payment method now</a></p>
                     """;
             }
+            case SUBSCRIPTION_SUSPENDED -> {
+                title = "Your subscription has been suspended";
+                bodyHtml = """
+                    <p>Hi {{customerName}},</p>
+                    <p>We were unable to recover payment for your {{planName}} subscription with {{merchantName}}
+                    within the grace period, so your subscription has now been suspended.</p>
+                    <p>You can still restore it at any time by updating your payment method — your account and
+                    data are kept safe in the meantime.</p>
+                    <p><a href="{{selfCureUrl}}" style="color:#4f46e5;">Restore my subscription</a></p>
+                    """;
+            }
             case SUBSCRIPTION_CANCELLED -> {
                 title = "Your subscription has been cancelled";
                 bodyHtml = """

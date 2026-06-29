@@ -6,7 +6,6 @@ import co.subpilot.notification.enums.EmailTemplate;
 import co.subpilot.notification.repository.NotificationLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +29,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EmailDispatcher {
 
-    private final @Qualifier("brevoEmailSender") EmailSender emailSender;
+    private final EmailSender emailSender;
     private final NotificationLogRepository notificationLogRepository;
 
     @Async("asyncExecutor")
@@ -66,6 +65,7 @@ public class EmailDispatcher {
             case PAYMENT_SUCCEEDED -> "Payment received";
             case PAYMENT_FAILED -> "Payment failed — action needed";
             case DUNNING_WARNING -> "Your subscription will be suspended soon";
+            case SUBSCRIPTION_SUSPENDED -> "Your subscription has been suspended";
             case SUBSCRIPTION_CANCELLED -> "Your subscription has been cancelled";
             case NEW_SUBSCRIBER -> "New subscriber!";
             case PAYMENT_FAILED_MERCHANT -> "A subscriber's payment failed";

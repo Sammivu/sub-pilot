@@ -102,6 +102,21 @@ public class NotificationService {
         });
     }
 
+    /**
+     * Fires once at the moment grace period elapses and the subscription
+     * transitions to 'suspended' — distinct from sendDunningWarning, which
+     * is the earlier "you have N days left" countdown. See
+     * DunningTriggerService.suspendIfNotAlready for the trigger point.
+     */
+    public void sendSubscriptionSuspended(Subscription sub) {
+        withContext(sub, (customer, plan, merchant) -> {
+            Map<String, String> vars = baseVars(customer, plan, merchant);
+            vars.put("selfCureUrl", portalUrl(sub.getSubscriptionToken()));
+            send(merchant.getId(), sub.getId(), customer.getEmail(), customer.getFullName(),
+                    EmailTemplate.SUBSCRIPTION_SUSPENDED, vars);
+        });
+    }
+
     public void sendSubscriptionCancelled(Subscription sub, String reason) {
         withContext(sub, (customer, plan, merchant) -> {
             Map<String, String> vars = baseVars(customer, plan, merchant);

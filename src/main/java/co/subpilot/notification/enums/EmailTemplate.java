@@ -20,6 +20,7 @@ public enum EmailTemplate {
     PAYMENT_SUCCEEDED,
     PAYMENT_FAILED,
     DUNNING_WARNING,
+    SUBSCRIPTION_SUSPENDED,
     SUBSCRIPTION_CANCELLED,
 
     // ── Merchant-facing ──────────────────────────────────────────────────────
