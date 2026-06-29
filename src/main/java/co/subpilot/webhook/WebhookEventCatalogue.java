@@ -16,6 +16,7 @@ public final class WebhookEventCatalogue {
             case "SUBSCRIPTION_CREATED" -> "subscription.created";
             case "SUBSCRIPTION_ACTIVATED" -> "subscription.activated";
             case "SUBSCRIPTION_PAST_DUE" -> "subscription.past_due";
+            case "SUBSCRIPTION_SUSPENDED" -> "subscription.suspended";
             case "SUBSCRIPTION_PAUSED" -> "subscription.paused";
             case "SUBSCRIPTION_RESUMED" -> "subscription.resumed";
             case "SUBSCRIPTION_CANCELLED" -> "subscription.cancelled";

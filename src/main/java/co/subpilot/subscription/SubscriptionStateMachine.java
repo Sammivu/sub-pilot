@@ -9,8 +9,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Encodes the subscription state machine exactly as specified in the
- * frontend's BACKEND_HANDOFF.md — 11 valid transitions, 6 states.
+ * Encodes the subscription state machine — 7 states, with the explicit
+ * suspended state separating "actively retrying within grace period" from
+ * "grace period elapsed, still recoverable but access should be cut off
+ * downstream" (see V8 migration for the full rationale).
  *
  * This is the authoritative server-side guard. The frontend UI displays
  * this table at /app/events but does NOT enforce it — we do, here.
@@ -19,16 +21,25 @@ import java.util.Set;
  *   trialing  -> active     (trial invoice paid / trial ends without cancellation)
  *   trialing  -> cancelled  (subscriber/operator cancels before activation)
  *   active    -> past_due   (renewal charge fails)
- *   past_due  -> active     (retry succeeds / portal self-cure)
+ *   past_due  -> active     (retry succeeds / portal self-cure, within grace period)
+ *   past_due  -> suspended  (grace_period_days elapses with no recovery)
+ *   suspended -> active     (retry succeeds / portal self-cure, after grace period)
+ *   suspended -> cancelled  (dunning exhausted, cancel_after_exhaustion = true)
+ *   suspended -> expired    (dunning exhausted, cancel_after_exhaustion = false)
  *   active    -> paused     (operator or supported subscriber action)
  *   paused    -> active     (merchant resume)
  *   active    -> cancelled  (operator or subscriber cancellation)
- *   past_due  -> cancelled  (dunning exhausted, cancel_after_exhaustion = true)
- *   past_due  -> expired    (dunning exhausted, cancel_after_exhaustion = false)
  *   paused    -> cancelled  (cancellation while paused)
  *   active    -> expired    (fixed term ends)
  *
  * cancelled and expired are terminal.
+ *
+ * Note: past_due -> cancelled / past_due -> expired (the pre-V8 direct
+ * transitions) are deliberately NOT retained. Every dunning-exhaustion path
+ * now passes through suspended first — see DunningTriggerService, which
+ * checks grace period elapse on every scheduler pass before ever reaching
+ * exhaustion, so a subscription should never skip straight from past_due
+ * to a terminal state under the current logic.
  */
 public final class SubscriptionStateMachine {
 
@@ -43,6 +54,9 @@ public final class SubscriptionStateMachine {
                 SubscriptionStatus.cancelled, SubscriptionStatus.expired
         ));
         TRANSITIONS.put(SubscriptionStatus.past_due, EnumSet.of(
+                SubscriptionStatus.active, SubscriptionStatus.suspended
+        ));
+        TRANSITIONS.put(SubscriptionStatus.suspended, EnumSet.of(
                 SubscriptionStatus.active, SubscriptionStatus.cancelled, SubscriptionStatus.expired
         ));
         TRANSITIONS.put(SubscriptionStatus.paused, EnumSet.of(
