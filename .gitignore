@@ -16,7 +16,9 @@ target/**
 
 # Logs
 *.log
-logs/
+logs/**
+config/**
+secret/**
 
 # Java
 *.class
