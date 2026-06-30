@@ -24,15 +24,24 @@ public final class AuditAction {
     public static final String API_KEY_CREATED = "api_key.created";
     public static final String API_KEY_REVOKED = "api_key.revoked";
 
+    // Users / auth (Gap 5/6)
+    public static final String USER_PASSWORD_CHANGED = "user.password_changed";
+
     // Webhook endpoints
     public static final String WEBHOOK_ENDPOINT_CREATED = "webhook_endpoint.created";
     public static final String WEBHOOK_ENDPOINT_DELETED = "webhook_endpoint.deleted";
 
-    // Dunning configuration (PRD §8 — merchants can customise their campaign)
+    // Dunning configuration (PRD §8 — merchants can customise their campaign) — Gap 3
     public static final String DUNNING_CAMPAIGN_UPDATED = "dunning_campaign.updated";
+    public static final String DUNNING_STEP_CREATED = "dunning_step.created";
+    public static final String DUNNING_STEP_UPDATED = "dunning_step.updated";
+    public static final String DUNNING_STEP_DELETED = "dunning_step.deleted";
 
-    // Refunds
+    // Refunds — Gap 1
     public static final String REFUND_INITIATED = "refund.initiated";
+
+    // Disbursements / payouts — Gap 2
+    public static final String PAYOUT_TRIGGERED = "payout.triggered";
 
     private AuditAction() {}
 }

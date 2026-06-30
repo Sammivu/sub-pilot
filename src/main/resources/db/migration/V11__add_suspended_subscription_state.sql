@@ -1,4 +1,4 @@
--- V8: Add 'suspended' as a distinct subscription state
+-- V11: Add 'suspended' as a distinct subscription state
 --
 -- Previously, "past_due" was overloaded to mean both "actively retrying
 -- within the dunning grace period" AND "grace period has fully elapsed,

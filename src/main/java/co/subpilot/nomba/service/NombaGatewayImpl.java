@@ -52,7 +52,16 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
 
     @Override
     public CheckoutResponse initiateCheckout(CheckoutRequest request) {
-        String orderReference = UUID.randomUUID().toString();
+        // Use the caller's merchantReference as Nomba's orderReference when
+        // provided — this is what makes the webhook traceable back to a
+        // specific subscription/purpose later (see WebhookController). A
+        // random UUID here would discard that traceability entirely, since
+        // Nomba echoes orderReference back verbatim on the inbound webhook
+        // but does NOT echo back arbitrary caller-side metadata blobs in a
+        // structure we can rely on for routing.
+        String orderReference = (request.merchantReference() != null && !request.merchantReference().isBlank())
+                ? request.merchantReference()
+                : UUID.randomUUID().toString();
 
         Map<String, Object> order = new LinkedHashMap<>();
         order.put("orderReference", orderReference);
@@ -67,7 +76,12 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         metaData.put("merchantReference", request.merchantReference());
         if (request.customerName() != null) metaData.put("customerName", request.customerName());
         if (request.customerPhone() != null) metaData.put("customerPhone", request.customerPhone());
-        if (request.metadata() != null) metaData.put("internalRef", request.metadata());
+        // orderMetaData is sent for Nomba's own dashboard/support visibility
+        // only — it is NOT relied upon for webhook routing, since Nomba does
+        // not echo it back on the inbound payment_success webhook (see
+        // CheckoutPurpose for how routing actually works: via orderReference
+        // prefix, which IS guaranteed to round-trip).
+        if (request.metadata() != null) metaData.put("note", request.metadata());
         order.put("orderMetaData", metaData);
 
         Map<String, Object> body = new LinkedHashMap<>();
