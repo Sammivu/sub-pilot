@@ -49,4 +49,5 @@ jobs:
 
             mv "$JAR" subpilot-api.jar
             
-            ./restart.sh
+            sudo systemctl restart subpilot-api
+            sudo systemctl status subpilot-api
