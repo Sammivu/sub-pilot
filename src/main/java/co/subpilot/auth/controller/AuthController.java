@@ -3,9 +3,9 @@ package co.subpilot.auth.controller;
 import co.subpilot.audit.AuditAction;
 import co.subpilot.audit.service.AuditLogService;
 import co.subpilot.auth.dto.AuthDtos;
+import co.subpilot.auth.security.SessionCookie;
 import co.subpilot.auth.service.AuthService;
 import co.subpilot.common.tenant.TenantContext;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,8 +25,6 @@ import java.util.Map;
 @RequestMapping("/v1")
 @RequiredArgsConstructor
 public class AuthController {
-
-    private static final String SESSION_COOKIE_NAME = "_subpilot_session";
 
     private final AuthService authService;
     private final AuditLogService auditLogService;
@@ -81,7 +79,7 @@ public class AuthController {
             authService.logout(auth.getName());
         }
 
-        ResponseCookie expired = ResponseCookie.from(SESSION_COOKIE_NAME, "")
+        ResponseCookie expired = ResponseCookie.from(SessionCookie.NAME, "")
                 .httpOnly(true)
                 .secure(cookieSecure)
                 .sameSite("Strict")
@@ -136,7 +134,7 @@ public class AuthController {
     }
 
     private ResponseCookie sessionCookie(String accessToken) {
-        return ResponseCookie.from(SESSION_COOKIE_NAME, accessToken)
+        return ResponseCookie.from(SessionCookie.NAME, accessToken)
                 .httpOnly(true)
                 .secure(cookieSecure)
                 .sameSite("Strict")
