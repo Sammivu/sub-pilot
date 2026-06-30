@@ -45,14 +45,8 @@ jobs:
           script: |
             cd /opt/apps/subpilot-api
 
-            JAR=$(ls *.jar | head -n 1)
-            
-            echo JAR
+            JAR=$(ls target/*.jar | head -n 1)
 
-            mv "$JAR" app.jar
+            mv "$JAR" subpilot-api.jar
             
-            sudo systemctl daemon-reload
-            
-            sudo systemctl restart subpilot-api
-
-            sudo systemctl status subpilot-api --no-pager
+            ./restart.sh
