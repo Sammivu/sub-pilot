@@ -23,8 +23,7 @@ jobs:
 
       - name: Build
         run: |
-          chmod +x mvnw
-          ./mvnw clean package -DskipTests
+          mvn clean package -DskipTests
 
       - name: Copy JAR
         uses: appleboy/scp-action@v0.1.7
