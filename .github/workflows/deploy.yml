@@ -48,3 +48,6 @@ jobs:
             JAR=$(ls target/*.jar | head -n 1)
 
             mv "$JAR" subpilot-api.jar
+            
+            sudo systemctl restart subpilot-api
+            sudo systemctl status subpilot-api
