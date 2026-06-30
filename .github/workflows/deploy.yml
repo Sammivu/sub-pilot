@@ -47,7 +47,7 @@ jobs:
 
             JAR=$(ls *.jar | head -n 1)
 
-            sudo mv "$JAR" subpilot-api.jar
+            mv "$JAR" subpilot-api.jar
             
             sudo systemctl daemon-reload
             
