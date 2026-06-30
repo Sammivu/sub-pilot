@@ -5,6 +5,7 @@ import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.repository.CustomerRepository;
 import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.repository.InvoiceRepository;
+import co.subpilot.nomba.CheckoutPurpose;
 import co.subpilot.nomba.NombaPaymentGateway;
 import co.subpilot.plan.PlanStatus;
 import co.subpilot.plan.entity.Plan;
@@ -122,14 +123,14 @@ public class PortalController {
 
         NombaPaymentGateway.CheckoutResponse checkout = nomba.initiateCheckout(
                 new NombaPaymentGateway.CheckoutRequest(
-                        "card_update_" + sub.getId(),
+                        CheckoutPurpose.CARD_UPDATE_PREFIX + sub.getId(),
                         plan.getAmount(),
                         plan.getCurrency(),
                         customer.getEmail(),
                         customer.getFullName(),
                         customer.getPhone(),
                         callbackUrl,
-                        "{\"subscriptionId\":\"" + sub.getId() + "\",\"purpose\":\"card_update\"}"
+                        "Card update checkout for subscription " + sub.getId()
                 )
         );
 

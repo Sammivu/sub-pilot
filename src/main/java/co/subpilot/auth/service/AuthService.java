@@ -13,6 +13,7 @@ import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -37,8 +38,11 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    @Value("${subpilot.jwt.refresh-expiration-ms}")
+    private long refreshExpirationMs;
+
     @Transactional
-    public AuthDtos.AuthResponse signup(AuthDtos.SignupRequest req) {
+    public AuthResult signup(AuthDtos.SignupRequest req) {
         if (merchantRepository.existsByEmail(req.email())) {
             throw new BusinessRuleException("email_taken", "An account with this email already exists.");
         }
@@ -62,14 +66,17 @@ public class AuthService {
                 .build());
 
         String token = jwtService.generateToken(user.getId(), merchant.getId(), user.getEmail());
+        String refreshToken = issueRefreshToken(user);
         log.info("New merchant signed up: {} ({})", merchant.getBusinessName(), merchant.getId());
 
-        return new AuthDtos.AuthResponse(token, merchant.getId(), user.getId(),
-                user.getEmail(), merchant.getBusinessName());
+        return new AuthResult(
+                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName()),
+                token, refreshToken
+        );
     }
 
     @Transactional
-    public AuthDtos.AuthResponse login(AuthDtos.LoginRequest req) {
+    public AuthResult login(AuthDtos.LoginRequest req) {
         User user = userRepository.findByEmail(req.email())
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
@@ -78,15 +85,105 @@ public class AuthService {
         }
 
         user.setLastLoginAt(Instant.now());
-        userRepository.save(user);
 
         Merchant merchant = merchantRepository.findById(user.getMerchantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", user.getMerchantId()));
 
         String token = jwtService.generateToken(user.getId(), merchant.getId(), user.getEmail());
-        return new AuthDtos.AuthResponse(token, merchant.getId(), user.getId(),
-                user.getEmail(), merchant.getBusinessName());
+        String refreshToken = issueRefreshToken(user); // also persists user (lastLoginAt + new refresh hash) in one save
+
+        return new AuthResult(
+                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName()),
+                token, refreshToken
+        );
     }
+
+    /**
+     * Gap 4 — exchanges a valid, unexpired refresh token for a brand-new
+     * access token + refresh token pair (rotation: the old refresh token is
+     * invalidated the moment a new one is issued, so a stolen refresh token
+     * can only be used once before the legitimate holder's next refresh
+     * silently invalidates it).
+     */
+    @Transactional
+    public AuthResult refresh(AuthDtos.RefreshRequest req) {
+        String hash = sha256(req.refreshToken());
+        User user = userRepository.findByRefreshTokenHash(hash)
+                .orElseThrow(() -> new BadCredentialsException("Invalid or expired refresh token"));
+
+        if (user.getRefreshTokenExpiresAt() == null || user.getRefreshTokenExpiresAt().isBefore(Instant.now())) {
+            throw new BadCredentialsException("Invalid or expired refresh token");
+        }
+
+        Merchant merchant = merchantRepository.findById(user.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", user.getMerchantId()));
+
+        String token = jwtService.generateToken(user.getId(), merchant.getId(), user.getEmail());
+        String newRefreshToken = issueRefreshToken(user); // rotates — old hash is overwritten
+
+        return new AuthResult(
+                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName()),
+                token, newRefreshToken
+        );
+    }
+
+    /** Gap 6 — expires the session by clearing the stored refresh token, so it can no longer be exchanged either. */
+    @Transactional
+    public void logout(String userId) {
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setRefreshTokenHash(null);
+            user.setRefreshTokenExpiresAt(null);
+            userRepository.save(user);
+        });
+    }
+
+    /** Gap 5 — validates the current password before replacing it with a new (re-hashed) one. */
+    @Transactional
+    public void changePassword(String userId, AuthDtos.ChangePasswordRequest req) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        if (!passwordEncoder.matches(req.currentPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Current password is incorrect.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+        // Invalidate the refresh token on password change — a classic
+        // security practice: changing your password should kick out any
+        // other long-lived session that might have been compromised.
+        user.setRefreshTokenHash(null);
+        user.setRefreshTokenExpiresAt(null);
+        userRepository.save(user);
+
+        log.info("Password changed for user={}", userId);
+    }
+
+    /**
+     * Generates a fresh opaque refresh token (NOT a JWT — a JWT can't be
+     * revoked without a denylist, which defeats the point; a random token
+     * whose hash we look up is trivially revocable by clearing the stored
+     * hash, exactly as logout() and changePassword() do above).
+     */
+    private String issueRefreshToken(User user) {
+        byte[] bytes = new byte[32];
+        new SecureRandom().nextBytes(bytes);
+        String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+
+        user.setRefreshTokenHash(sha256(rawToken));
+        user.setRefreshTokenExpiresAt(Instant.now().plusMillis(refreshExpirationMs));
+        userRepository.save(user);
+
+        return rawToken;
+    }
+
+    /**
+     * Carries both the public-safe AuthResponse body AND the access/refresh
+     * tokens that AuthController needs to set as cookies — kept out of
+     * AuthDtos.AuthResponse itself so there is no code path that could
+     * accidentally serialize a token into a JSON response (the entire point
+     * of Gap 6).
+     */
+    public record AuthResult(AuthDtos.AuthResponse body, String accessToken, String refreshToken) {}
 
     @Transactional
     public AuthDtos.ApiKeyResponse createApiKey(AuthDtos.CreateApiKeyRequest req) {

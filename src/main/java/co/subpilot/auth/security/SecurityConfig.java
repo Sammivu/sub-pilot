@@ -30,7 +30,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public auth endpoints
-                        .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login",
+                                "/v1/auth/refresh", "/v1/auth/logout").permitAll()
                         // Public plan pages (subscriber checkout)
                         .requestMatchers(HttpMethod.GET, "/v1/public/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/public/**").permitAll()

@@ -6,6 +6,7 @@ import co.subpilot.common.tenant.TenantContext;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -46,16 +47,39 @@ public class AuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         try {
-            String header = request.getHeader("Authorization");
-            if (header != null && header.startsWith("Bearer ")) {
-                String token = header.substring(7);
+            // Gap 6 — dashboard sessions authenticate via the HttpOnly
+            // _subpilot_session cookie. Checked first so a browser session
+            // never needs to send an Authorization header at all. The
+            // Authorization: Bearer header path below remains exactly as it
+            // was for API key callers — completely unaffected by this change.
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if (SessionCookie.NAME.equals(cookie.getName())) {
+                        authenticateJwt(cookie.getValue());
+                        break;
+                    }
+                }
+            }
 
-                if (token.startsWith("sk_")) {
-                    // API key auth
-                    authenticateApiKey(token);
-                } else {
-                    // JWT auth
-                    authenticateJwt(token);
+            // Fall through to the Authorization header only if the cookie
+            // path above didn't already authenticate the request — this
+            // covers both "no cookie present" (API key callers) and "cookie
+            // present but invalid" (authenticateJwt no-ops on an invalid
+            // token, so SecurityContext is still empty here).
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                String header = request.getHeader("Authorization");
+                if (header != null && header.startsWith("Bearer ")) {
+                    String token = header.substring(7);
+
+                    if (token.startsWith("sk_")) {
+                        // API key auth
+                        authenticateApiKey(token);
+                    } else {
+                        // JWT auth — e.g. a non-browser client sending the
+                        // access token directly rather than via cookie
+                        authenticateJwt(token);
+                    }
                 }
             }
         } catch (Exception e) {

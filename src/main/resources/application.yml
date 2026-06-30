@@ -54,10 +54,15 @@ server:
 # ── SubPilot App Config ──────────────────────────────────────────────────────
 subpilot:
 
+  # Auth (Gap 6 — HttpOnly cookie session)
+  auth:
+    cookie-secure: ${COOKIE_SECURE:false}   # set to true in production (HTTPS)
+
   # JWT
   jwt:
     secret: ${JWT_SECRET:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c}
-    expiration-ms: 86400000        # 24 hours
+    expiration-ms: 86400000        # 24 hours — access token (JWT) lifetime
+    refresh-expiration-ms: 2592000000  # 30 days — refresh token lifetime (Gap 4)
 
   # Nomba Integration
   nomba:

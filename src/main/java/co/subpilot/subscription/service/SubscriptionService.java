@@ -8,6 +8,7 @@ import co.subpilot.customer.repository.CustomerRepository;
 import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
 import co.subpilot.invoice.service.InvoiceService;
+import co.subpilot.nomba.CheckoutPurpose;
 import co.subpilot.nomba.NombaPaymentGateway;
 import co.subpilot.notification.service.NotificationService;
 import co.subpilot.plan.entity.Plan;
@@ -91,14 +92,14 @@ public class SubscriptionService {
 
         NombaPaymentGateway.CheckoutResponse checkout = nomba.initiateCheckout(
                 new NombaPaymentGateway.CheckoutRequest(
-                        "checkout_" + subscription.getId(),
+                        CheckoutPurpose.NEW_SUBSCRIPTION_PREFIX + subscription.getId(),
                         plan.getAmount(),
                         plan.getCurrency(),
                         customer.getEmail(),
                         customer.getFullName(),
                         customer.getPhone(),
                         callbackUrl + subscription.getId(),
-                        "{\"subscriptionId\":\"" + subscription.getId() + "\"}"
+                        "Initial subscription checkout for " + subscription.getId()
                 )
         );
 
