@@ -49,7 +49,7 @@ jobs:
             
             echo JAR
 
-            mv "$JAR" subpilot-api.jar
+            mv "$JAR" app.jar
             
             sudo systemctl daemon-reload
             
