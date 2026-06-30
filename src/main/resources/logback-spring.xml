@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="LOGFILE_PATH" source="logging.file.path" defaultValue="logs"/>
+    <springProperty scope="context" name="LOGFILE_MAX_SIZE" source="logging.file.max-size" defaultValue="10MB"/>
+    <springProperty scope="context" name="LOGFILE_MAX_HISTORY" source="logging.file.max-history" defaultValue="90"/>
+    <springProperty scope="context" name="LOGFILE_TOTAL_SIZE_CAP" source="logging.file.total-size-cap" defaultValue="10GB"/>
+    <springProperty scope="context" name="LOGFILE_NAME" source="logging.file.name" defaultValue="App"/>
+    <springProperty scope="context" name="LOGFILE_ROLLING_NAME" source="logging.file.rolling-name" defaultValue="app"/>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <appender name="FILELOGGER" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGFILE_PATH}/${LOGFILE_NAME}.log</file>
+        <append>true</append>
+        <!-- set immediateFlush to false for much higher logging throughput -->
+        <immediateFlush>true</immediateFlush>
+        <!-- encoders are assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- rollover daily -->
+            <fileNamePattern>${LOGFILE_PATH}/${LOGFILE_ROLLING_NAME}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <!-- each file should be at most 10MB, keep 60 days worth of history, but at most 10GB -->
+            <maxFileSize>${LOGFILE_MAX_SIZE}</maxFileSize>
+            <maxHistory>${LOGFILE_MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${LOGFILE_TOTAL_SIZE_CAP}</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="co.subpilot.config.MaskingPatternLayout">
+                <maskPattern>\"password\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"oldPassword\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"newPassword\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"confirmNewPassword\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"pin\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"transactionPin\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"token\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <pattern>%-4relative %d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{35} - %msg%n</pattern>
+            </layout>
+        </encoder>
+    </appender>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- set immediateFlush to false for much higher logging throughput -->
+        <immediateFlush>true</immediateFlush>
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="co.subpilot.config.MaskingPatternLayout">
+                <maskPattern>\"password\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"oldPassword\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"newPassword\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"confirmNewPassword\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"pin\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"transactionPin\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <maskPattern>\"token\"\s*:\s*\"(.*?)\"</maskPattern> <!-- Address JSON pattern -->
+                <pattern>%-4relative %d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{35} - %msg%n</pattern>
+            </layout>
+        </encoder>
+    </appender>
+
+    <springProfile name="local">
+        <logger name="es-error-logger" level="INFO" additivity="false">
+            <appender-ref ref="FILELOGGER"/>
+            <appender-ref ref="STDOUT"/>
+        </logger>
+        <root level="info">
+            <appender-ref ref="FILELOGGER"/>
+            <appender-ref ref="STDOUT"/>
+        </root>
+    </springProfile>
+    <springProfile name="dev">
+        <logger name="es-error-logger" level="INFO" additivity="false">
+            <appender-ref ref="FILELOGGER"/>
+        </logger>
+        <root level="info">
+            <appender-ref ref="FILELOGGER"/>
+        </root>
+    </springProfile>
+    <springProfile name="staging">
+        <logger name="es-error-logger" level="INFO" additivity="false">
+            <appender-ref ref="FILELOGGER"/>
+        </logger>
+        <root level="info">
+            <appender-ref ref="FILELOGGER"/>
+        </root>
+    </springProfile>
+    <springProfile name="prod">
+        <logger name="es-error-logger" level="INFO" additivity="false">
+            <appender-ref ref="FILELOGGER"/>
+        </logger>
+        <root level="info">
+            <appender-ref ref="FILELOGGER"/>
+        </root>
+    </springProfile>
+
+</configuration>
