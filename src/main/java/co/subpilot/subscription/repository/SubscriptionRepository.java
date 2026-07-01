@@ -34,6 +34,22 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Stri
     @Query("SELECT s FROM Subscription s WHERE s.status = 'active' AND s.nextBillingDate <= :now")
     List<Subscription> findDueForRenewal(@Param("now") Instant now);
 
+    /**
+     * TSQ reconciliation target: subscriptions whose initial (or card-update)
+     * Nomba checkout has never been confirmed by a webhook. A subscription
+     * with no card token yet, older than the given cutoff, and not in a
+     * terminal state, means the redirect happened but we never heard back —
+     * either the webhook was lost/delayed or the subscriber never finished
+     * paying. TSQ resolves the "lost webhook" case; a still-pending Nomba
+     * status just means "keep waiting", handled by the caller.
+     */
+    @Query("SELECT s FROM Subscription s WHERE s.nombaCardTokenRef IS NULL " +
+            "AND s.status IN ('trialing', 'active') AND s.createdAt <= :cutoff")
+    List<Subscription> findPendingCheckoutConfirmation(@Param("cutoff") Instant cutoff);
+
+    @Query("SELECT s FROM Subscription s WHERE s.pendingCardUpdateAt IS NOT NULL AND s.pendingCardUpdateAt <= :cutoff")
+    List<Subscription> findPendingCardUpdateConfirmation(@Param("cutoff") Instant cutoff);
+
     long countByMerchantIdAndStatus(String merchantId, SubscriptionStatus status);
 
     // Churn: cancelled in the last N days (for the rolling churn-rate metric)

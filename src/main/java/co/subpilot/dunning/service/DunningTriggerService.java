@@ -317,7 +317,22 @@ public class DunningTriggerService {
                 .orElse(null);
     }
 
-    private DunningCampaign createDefaultCampaign(String merchantId) {
+    /**
+     * Gap 3 fix: previously only created lazily on a merchant's first
+     * payment failure (via the orElseGet below), which meant GET
+     * /v1/dunning/campaigns returned an empty list for any merchant who
+     * hadn't churned yet — they had no way to configure dunning proactively.
+     * Now called eagerly from AuthService.signup() as well, so every
+     * merchant has a campaign to view/edit from day one. Safe to call more
+     * than once for the same merchant: guarded by findByMerchantIdAndIsDefaultTrue.
+     */
+    @Transactional
+    public DunningCampaign createDefaultCampaign(String merchantId) {
+        return campaignRepository.findByMerchantIdAndIsDefaultTrue(merchantId)
+                .orElseGet(() -> buildAndSaveDefaultCampaign(merchantId));
+    }
+
+    private DunningCampaign buildAndSaveDefaultCampaign(String merchantId) {
         DunningCampaign campaign = DunningCampaign.builder()
                 .merchantId(merchantId)
                 .name("Default Campaign")
@@ -363,6 +378,7 @@ public class DunningTriggerService {
         // Update card token
         sub.setNombaCardTokenRef(newCardToken);
         sub.setNombaCustomerRef(nombaCustomerId);
+        sub.setPendingCardUpdateAt(null); // resolved — TSQ no longer needs to chase this one
         subscriptionRepository.save(sub);
 
         // Find active dunning execution and attempt charge

@@ -60,6 +60,10 @@ public class Subscription extends BaseEntity {
     @Column(name = "nomba_card_token_ref")
     private String nombaCardTokenRef;
 
+    /** TSQ tracking (V13) — set when a card-update checkout is initiated, cleared on resolution either way. */
+    @Column(name = "pending_card_update_at")
+    private Instant pendingCardUpdateAt;
+
     @Column(name = "subscription_token", nullable = false, unique = true)
     private String subscriptionToken;
 

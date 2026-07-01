@@ -110,6 +110,15 @@ public class SubscriptionService {
                 subscription.getId(), checkout.checkoutUrl(), checkout.reference());
     }
 
+    /** TSQ tracking (V13): stamp the moment a card-update checkout is initiated, so reconciliation can find it if the webhook never arrives. */
+    @Transactional
+    public void markCardUpdateInitiated(String subscriptionId) {
+        subscriptionRepository.findById(subscriptionId).ifPresent(sub -> {
+            sub.setPendingCardUpdateAt(Instant.now());
+            subscriptionRepository.save(sub);
+        });
+    }
+
     /**
      * Called after Nomba checkout completes (via Nomba webhook or callback).
      * Activates the subscription and stores the card token.

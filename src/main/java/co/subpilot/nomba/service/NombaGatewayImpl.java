@@ -173,20 +173,37 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
      *
      * GET /v1/transactions/accounts/single?orderReference={orderReference}
      */
+    /**
+     * Nomba's real response schema for this endpoint (confirmed against
+     * https://developer.nomba.com/docs/products/accept-payment/verify-transactions)
+     * is flat and does NOT include tokenizedCardData or an accountId field:
+     *
+     *   { "code": "00", "data": { "id": "...", "status": "SUCCESS", "amount": "...",
+     *       "onlineCheckoutOrderReference": "...", "onlineCheckoutCustomerEmail": "...", ... } }
+     *
+     * Critically: the card tokenKey is delivered ONLY via the payment_success
+     * webhook, never via this endpoint. That means TSQ can confirm a
+     * checkout's payment status, but cannot by itself recover a card token
+     * for a genuinely-lost webhook — see NombaReconciliationService for how
+     * that's handled (flagged for follow-up rather than silently dropped).
+     */
     @Override
     public VerificationResponse verifyTransaction(String orderReference) {
         try {
             JsonNode response = apiClient.get("/transactions/accounts/single?orderReference=" + orderReference);
 
-            if (!apiClient.isSuccessEnvelope(response)) {
-                return new VerificationResponse(false, orderReference, "UNKNOWN");
+            if (!apiClient.isSuccessEnvelope(response) || response.path("data").isNull()) {
+                return new VerificationResponse(false, orderReference, "NOT_FOUND");
             }
 
             JsonNode data = response.path("data");
-            String status = data.path("status").asText("UNKNOWN"); // "SUCCESS" or "FAILED" per Nomba docs
+            String status = data.path("status").asText("UNKNOWN"); // "SUCCESS" or "FAILED"
             boolean success = "SUCCESS".equalsIgnoreCase(status);
+            String transactionId = data.path("id").asText(null); // Nomba's transaction id/reference
 
-            return new VerificationResponse(success, orderReference, status);
+            // No card token or customer id available from this endpoint —
+            // deliberately left null. See javadoc above.
+            return new VerificationResponse(success, orderReference, status, transactionId, null, null);
 
         } catch (NombaApiException e) {
             log.error("Failed to verify Nomba transaction ref={}: {}", orderReference, e.getMessage());

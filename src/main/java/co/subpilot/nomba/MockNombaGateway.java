@@ -85,7 +85,10 @@ public class MockNombaGateway implements NombaPaymentGateway {
     @Override
     public VerificationResponse verifyTransaction(String orderReference) {
         log.info("[MOCK NOMBA] Transaction verification — ref={} (always reports SUCCESS in mock mode)", orderReference);
-        return new VerificationResponse(true, orderReference, "SUCCESS");
+        String transactionId = "mock_verify_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String cardToken = "mock_token_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String customerId = "mock_customer_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        return new VerificationResponse(true, orderReference, "SUCCESS", transactionId, cardToken, customerId);
     }
 
     // ── Demo controls (call these from a test/demo endpoint if needed) ────────
