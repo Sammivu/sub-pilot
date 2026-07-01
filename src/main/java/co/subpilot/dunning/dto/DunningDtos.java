@@ -55,7 +55,15 @@ public class DunningDtos {
             String action,          // retry_charge | send_email | both
             String emailTemplate,   // payment_failed | final_warning | service_suspended | null
             String createdAt
-    ) {}
+    ) {
+        public static StepResponse from(co.subpilot.dunning.entity.DunningStep s) {
+            return new StepResponse(
+                    s.getId(), s.getStepNumber(), s.getDayOffset(),
+                    s.getAction(), s.getEmailTemplate(),
+                    s.getCreatedAt() != null ? s.getCreatedAt().toString() : null
+            );
+        }
+    }
 
     /**
      * PATCH /v1/dunning/campaigns/{id} — only the fields a merchant can

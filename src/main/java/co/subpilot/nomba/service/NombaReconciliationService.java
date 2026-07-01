@@ -47,6 +47,19 @@ public class NombaReconciliationService {
      * subscriptions still in trialing/active WITHOUT a card token get
      * activated; a subscription that's already been activated (nombaCardTokenRef
      * already set) is left untouched.
+     *
+     * IMPORTANT LIMITATION: Nomba's verify-transaction endpoint does not
+     * return the card tokenKey (confirmed against Nomba's docs) — it is only
+     * ever delivered via the payment_success webhook. So when this is called
+     * from the TSQ path with cardToken == null, it means: "payment
+     * definitely succeeded, but we still don't have anything to bill this
+     * subscriber with going forward." That is NOT the same as "nothing
+     * happened" — the subscriber paid. This is logged at WARN specifically
+     * so it surfaces for manual follow-up (e.g. contact the subscriber to
+     * re-run checkout, or use ops tooling / accountId lookup against Nomba's
+     * dashboard) rather than silently vanishing. It should be rare — it only
+     * happens if the payment_success webhook for that exact transaction was
+     * never delivered even once, ever, which webhook retries make unlikely.
      */
     @Transactional
     public void resolveNewSubscriptionCheckout(String subscriptionId, String cardToken,
@@ -68,7 +81,10 @@ public class NombaReconciliationService {
             return;
         }
         if (cardToken == null) {
-            log.warn("[{}] checkout succeeded for subscription={} but no card token was present — cannot activate", source, subscriptionId);
+            log.warn("[{}] Payment CONFIRMED SUCCEEDED for subscription={} (reference={}) but no card token is " +
+                            "available to complete activation — this needs manual follow-up, the subscriber has paid. " +
+                            "See NombaReconciliationService javadoc.",
+                    source, subscriptionId, nombaReference);
             return;
         }
 
