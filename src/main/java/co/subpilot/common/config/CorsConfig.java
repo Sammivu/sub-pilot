@@ -12,7 +12,7 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    @Value("${subpilot.frontend.base-url:http://localhost:5173}")
+    @Value("${subpilot.frontend.base-url:https://subpilot-web.subpilot-app.workers.dev}")
     private String frontendBaseUrl;
 
     @Bean
@@ -31,7 +31,8 @@ public class CorsConfig {
                 "Authorization",
                 "Content-Type",
                 "Idempotency-Key",
-                "X-SubPilot-Signature"
+                "X-SubPilot-Signature",
+                "X-CSRF-Token"
         ));
         config.setExposedHeaders(List.of("X-SubPilot-Signature"));
         config.setAllowCredentials(true);

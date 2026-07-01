@@ -11,5 +11,20 @@ package co.subpilot.auth.security;
 public final class SessionCookie {
     public static final String NAME = "_subpilot_session";
 
+    /** Phase B handoff item 2 — HttpOnly refresh cookie, paired with NAME above. */
+    public static final String REFRESH_NAME = "_subpilot_refresh";
+
+    /**
+     * Item 4 — double-submit CSRF cookie. Deliberately NOT HttpOnly: the
+     * frontend JS must be able to read it to echo it back as the
+     * X-CSRF-Token header. This is safe precisely because it's readable —
+     * a cross-site attacker's page can't read cookies set by subpilot.co's
+     * origin (same-origin policy on document.cookie), so it can't forge a
+     * matching header even though the browser will auto-attach the actual
+     * session cookie to a forged request. See CsrfProtectionFilter.
+     */
+    public static final String CSRF_NAME = "_subpilot_csrf";
+    public static final String CSRF_HEADER = "X-CSRF-Token";
+
     private SessionCookie() {}
 }
