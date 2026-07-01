@@ -1,0 +1,28 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Environment
+.env.example
+
+# Maven
+target/**
+
+# IntelliJ
+.idea/
+*.iml
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+logs/**
+config/**
+secret/**
+
+# Java
+*.class
+
+# Spring
+application-local.yml
+

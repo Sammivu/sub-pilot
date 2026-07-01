@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: subpilot-backend
+  config:
+    import: ${CONFIG_LOCATION:files:optional:./config/application.yml}
