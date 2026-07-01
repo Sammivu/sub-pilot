@@ -39,6 +39,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AuthFilter extends OncePerRequestFilter {
 
+    /** Item 4 — set when a request authenticated via the _subpilot_session cookie, read by CsrfProtectionFilter.
+     * Never set for API key / raw-header JWT auth, which are not CSRF-vulnerable. */
+    public static final String COOKIE_AUTH_ATTRIBUTE = "subpilot.cookieAuth";
+
     private final JwtService jwtService;
     private final ApiKeyRepository apiKeyRepository;
 
@@ -57,6 +61,9 @@ public class AuthFilter extends OncePerRequestFilter {
                 for (Cookie cookie : cookies) {
                     if (SessionCookie.NAME.equals(cookie.getName())) {
                         authenticateJwt(cookie.getValue());
+                        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                            request.setAttribute(COOKIE_AUTH_ATTRIBUTE, true);
+                        }
                         break;
                     }
                 }

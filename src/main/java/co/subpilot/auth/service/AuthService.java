@@ -135,10 +135,42 @@ public class AuthService {
         );
     }
 
+    /** Item 1 — GET /v1/auth/me session bootstrap. Re-fetches current identity by userId (from the JWT subject),
+     * not from the JWT claims themselves, so a since-changed businessName/email is always fresh.
+     **/
+    public AuthDtos.AuthResponse getCurrentUser(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        Merchant merchant = merchantRepository.findById(user.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", user.getMerchantId()));
+
+        return new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName());
+    }
+
     /** Gap 6 — expires the session by clearing the stored refresh token, so it can no longer be exchanged either. */
     @Transactional
     public void logout(String userId) {
         userRepository.findById(userId).ifPresent(user -> {
+            user.setRefreshTokenHash(null);
+            user.setRefreshTokenExpiresAt(null);
+            userRepository.save(user);
+        });
+    }
+
+    /**
+     * Item 3 — logout keyed off the refresh credential rather than the
+     * current SecurityContext. This is what makes logout work even when the
+     * short-lived access cookie has already expired: the refresh token is
+     * long-lived, so it's still around and identifiable by its hash even
+     * after the access token that came with it is dead. Silently no-ops if
+     * the hash doesn't match anything (already logged out, or a bogus
+     * cookie) — logout is idempotent by design, never an error.
+     */
+    @Transactional
+    public void logoutByRefreshToken(String rawRefreshToken) {
+        String hash = sha256(rawRefreshToken);
+        userRepository.findByRefreshTokenHash(hash).ifPresent(user -> {
             user.setRefreshTokenHash(null);
             user.setRefreshTokenExpiresAt(null);
             userRepository.save(user);
