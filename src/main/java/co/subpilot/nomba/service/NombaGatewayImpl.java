@@ -186,7 +186,14 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
             String status = data.path("status").asText("UNKNOWN"); // "SUCCESS" or "FAILED" per Nomba docs
             boolean success = "SUCCESS".equalsIgnoreCase(status);
 
-            return new VerificationResponse(success, orderReference, status);
+            // Same envelope shape as the inbound payment_success webhook
+            // (see WebhookController) — parsed here too so a TSQ sweep can
+            // complete the exact same activation flow a webhook would have.
+            String transactionId = data.path("transaction").path("transactionId").asText(null);
+            String cardToken = data.path("tokenizedCardData").path("tokenKey").asText(null);
+            String customerId = data.path("order").path("accountId").asText(null);
+
+            return new VerificationResponse(success, orderReference, status, transactionId, cardToken, customerId);
 
         } catch (NombaApiException e) {
             log.error("Failed to verify Nomba transaction ref={}: {}", orderReference, e.getMessage());

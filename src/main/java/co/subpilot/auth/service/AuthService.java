@@ -9,6 +9,7 @@ import co.subpilot.auth.security.JwtService;
 import co.subpilot.common.exception.BusinessRuleException;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.common.tenant.TenantContext;
+import co.subpilot.dunning.service.DunningTriggerService;
 import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class AuthService {
     private final ApiKeyRepository apiKeyRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final DunningTriggerService dunningTriggerService;
 
     @Value("${subpilot.jwt.refresh-expiration-ms}")
     private long refreshExpirationMs;
@@ -67,6 +69,12 @@ public class AuthService {
 
         String token = jwtService.generateToken(user.getId(), merchant.getId(), user.getEmail());
         String refreshToken = issueRefreshToken(user);
+
+        // Gap 3: give every merchant a default dunning campaign immediately,
+        // not just after their first payment failure — otherwise the
+        // dunning settings screen has nothing to show a brand-new merchant.
+        dunningTriggerService.createDefaultCampaign(merchant.getId());
+
         log.info("New merchant signed up: {} ({})", merchant.getBusinessName(), merchant.getId());
 
         return new AuthResult(

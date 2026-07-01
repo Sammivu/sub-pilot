@@ -134,6 +134,8 @@ public class PortalController {
                 )
         );
 
+        subscriptionService.markCardUpdateInitiated(sub.getId());
+
         return ResponseEntity.ok(new PortalDtos.PortalUpdateCardResponse(checkout.checkoutUrl(), checkout.reference()));
     }
 
