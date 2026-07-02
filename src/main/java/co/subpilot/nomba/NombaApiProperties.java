@@ -9,14 +9,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "subpilot.nomba")
 public class NombaApiProperties {
 
-    private String baseUrl = "https://api.nomba.com/v1";
+    private String baseUrl;
     private String accountId;
     private String clientId;
     private String clientSecret;
-    private boolean mockMode = true;
+    private boolean mockMode;
     private String webhookSecret;
-    private long connectTimeoutMs = 5000;
-    private long readTimeoutMs = 15000;
+    private long connectTimeoutMs;
+    private long readTimeoutMs;
 
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }

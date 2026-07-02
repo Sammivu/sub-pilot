@@ -39,6 +39,7 @@ public class NombaApiClient {
     }
 
     public JsonNode post(String path, Map<String, Object> body) {
+        log.info("POST URL PATH={}", path);
         return execute(path, "POST", body, false);
     }
 
@@ -73,6 +74,7 @@ public class NombaApiClient {
     }
 
     public JsonNode get(String path) {
+        log.info("GET URL PATH={}", path);
         try {
             return webClient.get()
                     .uri(path)
