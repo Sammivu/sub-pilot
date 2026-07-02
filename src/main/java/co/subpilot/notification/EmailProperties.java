@@ -12,14 +12,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "subpilot.email")
 public class EmailProperties {
 
-    private String provider = "brevo";
+    private String provider;
     private String brevoApiKey;
-    private String brevoBaseUrl = "https://api.brevo.com/v3";
-    private String fromEmail = "noreply@subpilot.co";
-    private String fromName = "SubPilot";
-    private boolean enabled = true; // set false to no-op all sends (e.g. in CI)
-    private long connectTimeoutMs = 5000;
-    private long readTimeoutMs = 10000;
+    private String brevoBaseUrl;
+    private String fromEmail;
+    private String fromName;
+    private boolean enabled; // set false to no-op all sends (e.g. in CI)
+    private long connectTimeoutMs;
+    private long readTimeoutMs;
 
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
