@@ -20,12 +20,20 @@ import org.springframework.web.cors.CorsConfigurationSource;
 public class SecurityConfig {
 
     private final AuthFilter authFilter;
+    private final CsrfProtectionFilter csrfProtectionFilter;
     private final CorsConfigurationSource corsConfigurationSource;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                // Spring's built-in CSRF machinery is session-based
+                // (CsrfTokenRepository backed by HttpSession), which doesn't
+                // fit a stateless-JWT app. CsrfProtectionFilter below
+                // implements the double-submit-cookie pattern instead,
+                // which needs no server-side session. This disable() is not
+                // "CSRF is off" — it's "we're not using Spring's session-based
+                // implementation of it".
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -46,7 +54,10 @@ public class SecurityConfig {
                         // Everything else requires auth
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class)
+                // Item 4 — runs immediately after AuthFilter so it can read
+                // the COOKIE_AUTH_ATTRIBUTE AuthFilter just set.
+                .addFilterAfter(csrfProtectionFilter, AuthFilter.class);
 
         return http.build();
     }
