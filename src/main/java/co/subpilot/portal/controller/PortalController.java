@@ -60,8 +60,8 @@ public class PortalController {
     // ── View subscription + next billing date ─────────────────────────────────
 
     @GetMapping
-    public ResponseEntity<PortalDtos.PortalSubscriptionView> getSubscription(@PathVariable String token) {
-        Subscription sub = subscriptionService.getByToken(token);
+    public ResponseEntity<PortalDtos.PortalSubscriptionView> getSubscription(@PathVariable String subscriptionToken) {
+        Subscription sub = subscriptionService.getByToken(subscriptionToken);
         Plan plan = planRepository.findById(sub.getPlanId())
                 .orElseThrow(() -> new ResourceNotFoundException("plan", sub.getPlanId()));
         Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
@@ -74,8 +74,8 @@ public class PortalController {
     // ── Invoice history (PRD §6.7: "view invoice history") ─────────────────────
 
     @GetMapping("/invoices")
-    public ResponseEntity<List<PortalDtos.PortalInvoiceView>> getInvoices(@PathVariable String token) {
-        Subscription sub = subscriptionService.getByToken(token);
+    public ResponseEntity<List<PortalDtos.PortalInvoiceView>> getInvoices(@PathVariable String subscriptionToken) {
+        Subscription sub = subscriptionService.getByToken(subscriptionToken);
         List<Invoice> invoices = invoiceRepository.findBySubscriptionIdOrderByCreatedAtDesc(sub.getId());
         return ResponseEntity.ok(invoices.stream().map(PortalDtos.PortalInvoiceView::from).toList());
     }
@@ -84,9 +84,9 @@ public class PortalController {
 
     @PostMapping("/cancel")
     public ResponseEntity<PortalDtos.PortalSubscriptionView> cancel(
-            @PathVariable String token,
+            @PathVariable String subscriptionToken,
             @Valid @RequestBody(required = false) PortalDtos.PortalCancelRequest req) {
-        Subscription sub = subscriptionService.getByToken(token);
+        Subscription sub = subscriptionService.getByToken(subscriptionToken);
         String reason = req != null ? req.reason() : null;
 
         Subscription cancelled = subscriptionService.cancelViaPortal(sub, reason);
@@ -107,8 +107,8 @@ public class PortalController {
     // subscription.
 
     @PostMapping("/update-card")
-    public ResponseEntity<PortalDtos.PortalUpdateCardResponse> updateCard(@PathVariable String token) {
-        Subscription sub = subscriptionService.getByToken(token);
+    public ResponseEntity<PortalDtos.PortalUpdateCardResponse> updateCard(@PathVariable String subscriptionToken) {
+        Subscription sub = subscriptionService.getByToken(subscriptionToken);
         Plan plan = planRepository.findById(sub.getPlanId())
                 .orElseThrow(() -> new ResourceNotFoundException("plan", sub.getPlanId()));
         Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
@@ -119,7 +119,7 @@ public class PortalController {
         // checkout flow requires an amount field regardless, so we pass the
         // plan's normal price; the actual settlement still only happens on
         // the next real billing-engine renewal, not from this checkout.
-        String callbackUrl = frontendBaseUrl + "/portal/" + token + "/card-updated";
+        String callbackUrl = frontendBaseUrl + "/portal/" + subscriptionToken + "/card-updated";
 
         NombaPaymentGateway.CheckoutResponse checkout = nomba.initiateCheckout(
                 new NombaPaymentGateway.CheckoutRequest(
@@ -142,8 +142,8 @@ public class PortalController {
     // ── Upgrade / downgrade plan (PRD §6.7: "upgrade/downgrade plan") ───────────
 
     @GetMapping("/available-plans")
-    public ResponseEntity<List<PortalDtos.PortalAvailablePlan>> getAvailablePlans(@PathVariable String token) {
-        Subscription sub = subscriptionService.getByToken(token);
+    public ResponseEntity<List<PortalDtos.PortalAvailablePlan>> getAvailablePlans(@PathVariable String subscriptionToken) {
+        Subscription sub = subscriptionService.getByToken(subscriptionToken);
 
         List<Plan> plans = planRepository
                 .findByMerchantIdAndStatus(sub.getMerchantId(), PlanStatus.published,
@@ -159,9 +159,9 @@ public class PortalController {
 
     @PostMapping("/change-plan")
     public ResponseEntity<ProrationDtos.ChangePlanResponse> changePlan(
-            @PathVariable String token,
+            @PathVariable String subscriptionToken,
             @Valid @RequestBody PortalDtos.PortalChangePlanRequest req) {
-        Subscription sub = subscriptionService.getByToken(token);
+        Subscription sub = subscriptionService.getByToken(subscriptionToken);
         return ResponseEntity.ok(prorationService.changePlanViaPortal(sub, req.newPlanId()));
     }
 }
