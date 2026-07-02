@@ -54,18 +54,24 @@ public class NombaReconciliationJob {
     @Value("${subpilot.nomba.reconciliation.grace-period-minutes:5}")
     private long gracePeriodMinutes;
 
+    /** Stops retrying past this age — see findPendingCheckoutConfirmation's javadoc for why an upper bound matters, not just a lower one. */
+    @Value("${subpilot.nomba.reconciliation.max-age-hours:48}")
+    private long maxAgeHours;
+
     @Scheduled(fixedDelayString = "${subpilot.nomba.reconciliation.interval-ms:300000}") // every 5 minutes by default
     @SchedulerLock(name = "nomba_reconciliation", lockAtLeastFor = "PT1M", lockAtMostFor = "PT10M")
     public void reconcile() {
         Instant cutoff = Instant.now().minus(gracePeriodMinutes, ChronoUnit.MINUTES);
+        Instant notOlderThan = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
 
-        reconcileNewSubscriptionCheckouts(cutoff);
-        reconcileCardUpdateCheckouts(cutoff);
+        reconcileNewSubscriptionCheckouts(cutoff, notOlderThan);
+        reconcileCardUpdateCheckouts(cutoff, notOlderThan);
         reconcileStuckPaymentAttempts(cutoff);
+        logGivingUpOnAgedOutSubscriptions(notOlderThan);
     }
 
-    private void reconcileNewSubscriptionCheckouts(Instant cutoff) {
-        List<Subscription> pending = subscriptionRepository.findPendingCheckoutConfirmation(cutoff);
+    private void reconcileNewSubscriptionCheckouts(Instant cutoff, Instant notOlderThan) {
+        List<Subscription> pending = subscriptionRepository.findPendingCheckoutConfirmation(cutoff, notOlderThan);
         if (pending.isEmpty()) return;
 
         log.info("TSQ: reconciling {} pending new-subscription checkout(s)", pending.size());
@@ -93,8 +99,8 @@ public class NombaReconciliationJob {
         }
     }
 
-    private void reconcileCardUpdateCheckouts(Instant cutoff) {
-        List<Subscription> pending = subscriptionRepository.findPendingCardUpdateConfirmation(cutoff);
+    private void reconcileCardUpdateCheckouts(Instant cutoff, Instant notOlderThan) {
+        List<Subscription> pending = subscriptionRepository.findPendingCardUpdateConfirmation(cutoff, notOlderThan);
         if (pending.isEmpty()) return;
 
         log.info("TSQ: reconciling {} pending card-update checkout(s)", pending.size());
@@ -114,6 +120,23 @@ public class NombaReconciliationJob {
                 log.error("TSQ: failed to reconcile card update for subscription={}: {}", sub.getId(), e.getMessage(), e);
             }
         }
+    }
+
+    /**
+     * Distinct from the per-check WARN in NombaReconciliationService — this
+     * fires once per sweep for the whole aged-out set, so it's an ongoing,
+     * visible signal that manual intervention is still needed, without the
+     * noise of a full Nomba API round-trip every 5 minutes for something
+     * that's already known to require a human.
+     */
+    private void logGivingUpOnAgedOutSubscriptions(Instant notOlderThan) {
+        List<Subscription> agedOut = subscriptionRepository.findAgedOutPendingCheckouts(notOlderThan);
+        if (agedOut.isEmpty()) return;
+
+        log.error("TSQ: {} subscription(s) exceeded the {}h reconciliation window with no card token — " +
+                        "no longer being auto-retried, needs manual review: {}",
+                agedOut.size(), maxAgeHours,
+                agedOut.stream().map(Subscription::getId).toList());
     }
 
     private void reconcileStuckPaymentAttempts(Instant cutoff) {

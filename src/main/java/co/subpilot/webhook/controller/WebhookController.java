@@ -445,12 +445,30 @@ public class WebhookController {
 
     // ── Inbound Nomba webhook handler ─────────────────────────────────────────
 
+    /**
+     * Header names confirmed against Nomba's sandbox testing docs
+     * (developer.nomba.com/docs/products/accept-payment/sandbox-testing) —
+     * NOT X-Nomba-Signature/X-Nomba-Timestamp, which don't exist on a real
+     * Nomba webhook and were silently swallowing every real inbound
+     * webhook as a 401 (masked in testing so far because mock mode
+     * bypasses verification entirely).
+     *
+     * nomba-signature is confirmed as the header to verify — straight from
+     * Nomba's own dashboard copy: "We sign every webhook we forward to
+     * you. Use this key to verify the nomba-signature header so you know
+     * it genuinely came from Nomba." That's the authoritative source here,
+     * ahead of the docs cross-reference ambiguity this used to carry.
+     * nomba-sig-value is kept only as a harmless defensive fallback, not
+     * because it's equally likely to be the right one.
+     */
     @PostMapping("/v1/webhooks/nomba")
     public ResponseEntity<String> handleNombaWebhook(
             @RequestBody String rawPayload,
-            @RequestHeader(value = "X-Nomba-Signature", required = false) String signature,
-            @RequestHeader(value = "X-Nomba-Timestamp", required = false) String timestamp) {
+            @RequestHeader(value = "nomba-signature", required = false) String signature,
+            @RequestHeader(value = "nomba-sig-value", required = false) String signatureValueFallback,
+            @RequestHeader(value = "nomba-timestamp", required = false) String timestamp) {
 
+        log.info("Nomba Raw WEBHOOK payload===={}", rawPayload);
         // 1. Verify signature.
         //    Real mode: Nomba's HMAC scheme is computed over specific JSON
         //    fields + a timestamp header (see NombaWebhookSignatureVerifier),
@@ -469,6 +487,9 @@ public class WebhookController {
         if (realSignatureVerifier != null) {
             JsonNode jsonNode = objectMapper.valueToTree(event);
             signatureValid = realSignatureVerifier.verify(jsonNode, timestamp, signature);
+            if (!signatureValid && signatureValueFallback != null) {
+                signatureValid = realSignatureVerifier.verify(jsonNode, timestamp, signatureValueFallback);
+            }
         } else {
             signatureValid = nomba.verifyWebhookSignature(rawPayload, signature);
         }

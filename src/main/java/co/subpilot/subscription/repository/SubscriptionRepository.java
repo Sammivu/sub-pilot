@@ -42,13 +42,28 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Stri
      * either the webhook was lost/delayed or the subscriber never finished
      * paying. TSQ resolves the "lost webhook" case; a still-pending Nomba
      * status just means "keep waiting", handled by the caller.
+     *
+     * notOlderThan bounds the OTHER end: without it, a checkout that keeps
+     * confirming SUCCESS-but-no-token-available (see
+     * NombaReconciliationService's "needs manual follow-up" WARN) gets
+     * requeried forever, every single sweep, indefinitely. Nomba's own
+     * sandbox data retention is 48 hours ("Orders and their data are stored
+     * for 48 hours before expiring" — see sandbox-testing docs), which is
+     * also a reasonable real-world cutoff: if nobody's resolved this
+     * manually within that window, hammering Nomba every 5 minutes stops
+     * helping and just adds noise/log spam.
      */
     @Query("SELECT s FROM Subscription s WHERE s.nombaCardTokenRef IS NULL " +
-            "AND s.status IN ('trialing', 'active') AND s.createdAt <= :cutoff")
-    List<Subscription> findPendingCheckoutConfirmation(@Param("cutoff") Instant cutoff);
+            "AND s.status IN ('trialing', 'active') AND s.createdAt <= :cutoff AND s.createdAt >= :notOlderThan")
+    List<Subscription> findPendingCheckoutConfirmation(@Param("cutoff") Instant cutoff, @Param("notOlderThan") Instant notOlderThan);
 
-    @Query("SELECT s FROM Subscription s WHERE s.pendingCardUpdateAt IS NOT NULL AND s.pendingCardUpdateAt <= :cutoff")
-    List<Subscription> findPendingCardUpdateConfirmation(@Param("cutoff") Instant cutoff);
+    @Query("SELECT s FROM Subscription s WHERE s.nombaCardTokenRef IS NULL " +
+            "AND s.status IN ('trialing', 'active') AND s.createdAt < :notOlderThan")
+    List<Subscription> findAgedOutPendingCheckouts(@Param("notOlderThan") Instant notOlderThan);
+
+    @Query("SELECT s FROM Subscription s WHERE s.pendingCardUpdateAt IS NOT NULL " +
+            "AND s.pendingCardUpdateAt <= :cutoff AND s.pendingCardUpdateAt >= :notOlderThan")
+    List<Subscription> findPendingCardUpdateConfirmation(@Param("cutoff") Instant cutoff, @Param("notOlderThan") Instant notOlderThan);
 
     long countByMerchantIdAndStatus(String merchantId, SubscriptionStatus status);
 
