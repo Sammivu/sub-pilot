@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -80,6 +81,36 @@ public class MockNombaGateway implements NombaPaymentGateway {
         String reference = "mock_refund_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         log.info("[MOCK NOMBA] Refund initiated — ref={} amount={}", reference, request.amountKobo());
         return new RefundResponse(true, reference, null);
+    }
+
+    @Override
+    public TransferResponse initiateBankTransfer(BankTransferRequest request) {
+        String reference = "mock_transfer_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        log.info("[MOCK NOMBA] Bank transfer initiated — ref={} amount={} account={}",
+                reference, request.amountKobo(), request.accountNumber());
+        return new TransferResponse(true, reference, "SUCCESS", null);
+    }
+
+    @Override
+    public BankLookupResponse lookupBankAccount(String accountNumber, String bankCode) {
+        log.info("[MOCK NOMBA] Bank lookup — accountNumber={} bankCode={} (always resolves in mock mode)", accountNumber, bankCode);
+        return new BankLookupResponse(true, accountNumber, "Mock Test Account", null);
+    }
+
+    @Override
+    public List<BankInfo> listBanks() {
+        return List.of(
+                new BankInfo("Access Bank", "044"),
+                new BankInfo("GTBank", "058"),
+                new BankInfo("Zenith Bank", "057"),
+                new BankInfo("Nombank MFB", "990")
+        );
+    }
+
+    @Override
+    public TransferResponse verifyTransfer(String merchantTxRef) {
+        log.info("[MOCK NOMBA] Transfer verification — ref={} (always reports SUCCESS in mock mode)", merchantTxRef);
+        return new TransferResponse(true, merchantTxRef, "SUCCESS", null);
     }
 
     @Override

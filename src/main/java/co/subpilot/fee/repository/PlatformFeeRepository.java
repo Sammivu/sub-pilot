@@ -17,13 +17,22 @@ public interface PlatformFeeRepository extends JpaRepository<PlatformFee, String
     Optional<PlatformFee> findByInvoiceId(String invoiceId);
 
     @Query("SELECT COALESCE(SUM(p.feeAmount), 0) FROM PlatformFee p WHERE p.merchantId = :merchantId " +
-           "AND p.createdAt >= :since")
+            "AND p.createdAt >= :since")
     long sumFeesByMerchantSince(@Param("merchantId") String merchantId, @Param("since") Instant since);
 
     @Query("SELECT COALESCE(SUM(p.feeAmount), 0) FROM PlatformFee p WHERE p.createdAt >= :since")
     long sumAllFeesSince(@Param("since") Instant since);
 
     @Query("SELECT COALESCE(SUM(p.grossAmount), 0) FROM PlatformFee p WHERE p.merchantId = :merchantId " +
-           "AND p.createdAt >= :since")
+            "AND p.createdAt >= :since")
     long sumGrossByMerchantSince(@Param("merchantId") String merchantId, @Param("since") Instant since);
+
+    /** Disbursement batching — sum of merchant payout owed for fees ledgered strictly after `since` (exclusive), so re-running never double-counts the boundary row. */
+    @Query("SELECT COALESCE(SUM(p.netAmount), 0) FROM PlatformFee p WHERE p.merchantId = :merchantId " +
+            "AND p.createdAt > :since AND p.createdAt <= :until")
+    long sumNetByMerchantBetween(@Param("merchantId") String merchantId, @Param("since") Instant since, @Param("until") Instant until);
+
+    @Query("SELECT COUNT(p) FROM PlatformFee p WHERE p.merchantId = :merchantId " +
+            "AND p.createdAt > :since AND p.createdAt <= :until")
+    long countByMerchantBetween(@Param("merchantId") String merchantId, @Param("since") Instant since, @Param("until") Instant until);
 }

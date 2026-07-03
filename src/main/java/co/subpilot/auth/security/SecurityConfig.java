@@ -21,6 +21,7 @@ public class SecurityConfig {
 
     private final AuthFilter authFilter;
     private final CsrfProtectionFilter csrfProtectionFilter;
+    private final co.subpilot.common.admin.AdminApiKeyFilter adminApiKeyFilter;
     private final CorsConfigurationSource corsConfigurationSource;
 
     @Bean
@@ -47,6 +48,11 @@ public class SecurityConfig {
                         .requestMatchers("/v1/portal/**").permitAll()
                         // Inbound Nomba webhooks
                         .requestMatchers(HttpMethod.POST, "/v1/webhooks/nomba").permitAll()
+                        // Admin endpoints — auth handled entirely by AdminApiKeyFilter
+                        // (static shared secret, not a merchant JWT), so this must be
+                        // permitAll here or AuthFilter's "no valid session" 401 would
+                        // fire first and AdminApiKeyFilter would never even run.
+                        .requestMatchers("/v1/admin/**").permitAll()
                         //Swagger
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // Actuator
@@ -57,7 +63,8 @@ public class SecurityConfig {
                 .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class)
                 // Item 4 — runs immediately after AuthFilter so it can read
                 // the COOKIE_AUTH_ATTRIBUTE AuthFilter just set.
-                .addFilterAfter(csrfProtectionFilter, AuthFilter.class);
+                .addFilterAfter(csrfProtectionFilter, AuthFilter.class)
+                .addFilterBefore(adminApiKeyFilter, AuthFilter.class);
 
         return http.build();
     }

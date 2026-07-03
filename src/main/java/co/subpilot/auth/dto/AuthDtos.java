@@ -2,14 +2,25 @@ package co.subpilot.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class AuthDtos {
 
     public record SignupRequest(
-            @NotBlank @Size(min = 2, max = 255) String businessName,
-            @NotBlank @Email String email,
-            @NotBlank @Size(min = 8, max = 100) String password
+            @NotBlank(message = "Business name is required.")
+            @Size(min = 2, max = 255, message = "Business name must be between 2 and 255 characters.")
+            String businessName,
+            @NotBlank(message = "Email address is required.")
+            @Email(message = "Please provide a valid email address.")
+            @Size(max = 255, message = "Email address is too long.")
+            String email,
+
+            @NotBlank(message = "Password is required.")
+            @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,100}$",
+                    message = "Password must contain at least one uppercase letter, one lowercase letter, one number, and be at least 8 characters long."
+            )
+            String password
     ) {}
 
     public record LoginRequest(

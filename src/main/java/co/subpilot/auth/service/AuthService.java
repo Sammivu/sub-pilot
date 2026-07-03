@@ -23,10 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -45,11 +42,14 @@ public class AuthService {
 
     @Transactional
     public AuthResult signup(AuthDtos.SignupRequest req) {
-        if (merchantRepository.existsByEmail(req.email())) {
+
+        String businessName = req.businessName().trim();
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        if (merchantRepository.existsByEmail(email)) {
             throw new BusinessRuleException("email_taken", "An account with this email already exists.");
         }
 
-        String slug = generateMerchantSlug(req.businessName());
+        String slug = generateMerchantSlug(businessName);
 
         Merchant merchant = merchantRepository.save(Merchant.builder()
                 .businessName(req.businessName())
@@ -61,8 +61,8 @@ public class AuthService {
 
         User user = userRepository.save(User.builder()
                 .merchantId(merchant.getId())
-                .email(req.email())
-                .name(req.businessName())
+                .email(email)
+                .name(businessName)
                 .role("owner")
                 .passwordHash(passwordEncoder.encode(req.password()))
                 .build());
@@ -85,7 +85,8 @@ public class AuthService {
 
     @Transactional
     public AuthResult login(AuthDtos.LoginRequest req) {
-        User user = userRepository.findByEmail(req.email())
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
