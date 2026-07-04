@@ -15,6 +15,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.f4b6a3.ulid.UlidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +57,9 @@ public class WebhookDeliveryService {
     };
     private static final int MAX_ATTEMPTS = BACKOFF_SCHEDULE.length;
 
+    @Autowired
+    @Lazy
+    private WebhookDeliveryService self;
     /**
      * Listens for EventService.EventCreated, firing only after the
      * surrounding transaction commits successfully (AFTER_COMMIT) — this is
@@ -63,7 +68,7 @@ public class WebhookDeliveryService {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onEventCreated(EventService.EventCreated eventCreated) {
-        dispatch(eventCreated.event());
+        self.dispatch(eventCreated.event());
     }
 
     /**
@@ -77,8 +82,8 @@ public class WebhookDeliveryService {
 
         for (WebhookEndpoint endpoint : endpoints) {
             if (endpoint.isSubscribedTo(publicEventName)) {
-                WebhookDelivery delivery = createDeliveryRecord(event, endpoint);
-                attemptDelivery(delivery, endpoint, event, publicEventName);
+                WebhookDelivery delivery = self.createDeliveryRecord(event, endpoint);
+                self.attemptDelivery(delivery, endpoint, event, publicEventName);
             }
         }
     }
