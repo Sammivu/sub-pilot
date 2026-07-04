@@ -38,7 +38,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Stri
             "AND (:status IS NULL OR s.status = :status) " +
             "AND (:planId IS NULL OR s.planId = :planId) " +
             "AND (:customerId IS NULL OR s.customerId = :customerId) " +
-            "AND (:q IS NULL OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(c.email) LIKE LOWER(CONCAT('%', :q, '%')))")
+            "AND (:q IS NULL OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR LOWER(c.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))))")
     Page<Subscription> search(@Param("merchantId") String merchantId,
                               @Param("status") SubscriptionStatus status,
                               @Param("planId") String planId,
