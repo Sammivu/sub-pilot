@@ -58,7 +58,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
      */
     @Query("SELECT i FROM Invoice i JOIN Customer c ON c.id = i.customerId WHERE i.merchantId = :merchantId " +
             "AND (:status IS NULL OR i.status = :status) " +
-            "AND (:q IS NULL OR LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR LOWER(c.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))))")
+            "AND (:q IS NULL OR LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')) OR LOWER(c.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))")
     Page<Invoice> search(@Param("merchantId") String merchantId,
                          @Param("status") String status,
                          @Param("q") String q,
