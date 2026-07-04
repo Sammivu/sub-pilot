@@ -27,10 +27,10 @@ public interface MerchantRepository extends JpaRepository<Merchant, String> {
      */
     @Query("SELECT m FROM Merchant m WHERE " +
             "(:query IS NULL OR " +
-            " LOWER(m.businessName) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR " +
-            " LOWER(m.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR " +
-            " LOWER(m.id) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR " +
-            " LOWER(m.slug) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) " +
+            " LOWER(m.businessName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))) OR " +
+            " LOWER(m.email) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))) OR " +
+            " LOWER(m.id) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))) OR " +
+            " LOWER(m.slug) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))) " +
             "AND (:status IS NULL OR m.status = :status)")
     Page<Merchant> search(@Param("query") String query, @Param("status") String status, Pageable pageable);
 }
