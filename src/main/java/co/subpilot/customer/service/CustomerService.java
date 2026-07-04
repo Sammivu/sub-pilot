@@ -78,4 +78,11 @@ public class CustomerService {
     public Page<Customer> list(String merchantId, Pageable pageable) {
         return customerRepository.findByMerchantId(merchantId, pageable);
     }
+
+    public Page<Customer> search(String merchantId, String q, Pageable pageable) {
+        if (q == null || q.isBlank()) {
+            return customerRepository.findByMerchantId(merchantId, pageable);
+        }
+        return customerRepository.search(merchantId, q, pageable);
+    }
 }

@@ -222,7 +222,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
             JsonNode response = apiClient.get("/v1/transactions/accounts/single?orderReference=" + orderReference);
 
             if (!apiClient.isSuccessEnvelope(response) || response.path("data").isNull()) {
-                return new VerificationResponse(false, orderReference, "NOT_FOUND");
+                return new VerificationResponse(false, orderReference, "Transaction doesn't exist yet or checkout abandoned");
             }
 
             JsonNode data = response.path("data");
