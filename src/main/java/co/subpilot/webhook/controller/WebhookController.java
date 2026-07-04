@@ -443,7 +443,9 @@ public class WebhookController {
             @RequestParam(defaultValue = "20") int size) {
         String merchantId = TenantContext.requireMerchantId();
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(deliveryRepository.search(merchantId, status, endpointId, eventType, pageable));
+        Page<WebhookDelivery> deliveries = deliveryRepository.search(merchantId, status, endpointId, eventType, pageable);
+        log.info("Listing deliveries for merchant={}", merchantId);
+        return ResponseEntity.ok(deliveries);
     }
 
     // ── Inbound Nomba webhook handler ─────────────────────────────────────────
