@@ -4,6 +4,8 @@ import co.subpilot.subscription.entity.Subscription;
 import co.subpilot.subscription.enums.SubscriptionStatus;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 public class SubscriptionDtos {
 
@@ -18,9 +20,17 @@ public class SubscriptionDtos {
      * Used by the public hosted checkout flow: /v1/public/plans/{merchantSlug}/{planSlug}/checkout
      */
     public record CheckoutRequest(
-            @NotBlank @Email String email,
-            @NotBlank String fullName,
+            @NotBlank(message = "Email is required")
+            @Email(message = "Please provide a valid email address")
+            @Size(max = 255, message = "Email cannot exceed 255 characters")
+            String email,
+            @NotBlank(message = "Full name is required")
+            @Size(min = 2, max = 100, message = "Full name must be between 2 and 100 characters")
+            String fullName,
+            @Pattern(regexp = "^[+\\d\\s()\\-]{8,20}$", message = "Please provide a valid phone number")
             String phone,
+//            @NotBlank(message = "Country code is required NG, GB, US")
+//            String countryCode,
             String merchantSlug,
             String planSlug
     ) {}

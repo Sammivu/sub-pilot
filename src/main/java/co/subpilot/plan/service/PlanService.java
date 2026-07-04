@@ -102,6 +102,19 @@ public class PlanService {
         return planRepository.findByMerchantId(merchantId, pageable);
     }
 
+    public Page<Plan> search(String merchantId, String q, String status, Pageable pageable) {
+        co.subpilot.plan.PlanStatus statusEnum = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                statusEnum = co.subpilot.plan.PlanStatus.valueOf(status.toLowerCase());
+            } catch (IllegalArgumentException e) {
+                throw new co.subpilot.common.exception.BusinessRuleException("invalid_status",
+                        "status must be one of: draft, published, archived.");
+            }
+        }
+        return planRepository.search(merchantId, (q != null && !q.isBlank()) ? q : null, statusEnum, pageable);
+    }
+
     public Plan getPublishedByMerchantAndPlanSlug(String merchantSlug, String planSlug) {
         return planRepository.findPublishedByMerchantSlugAndPlanSlug(merchantSlug, planSlug)
                 .orElseThrow(() -> new ResourceNotFoundException("plan", planSlug));

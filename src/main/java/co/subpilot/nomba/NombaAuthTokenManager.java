@@ -73,7 +73,7 @@ public class NombaAuthTokenManager {
         );
 
         JsonNode response = webClient.post()
-                .uri("/auth/token/issue")
+                .uri("/v1/auth/token/issue")
                 .header("accountId", properties.getAccountId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)

@@ -1,9 +1,13 @@
 package co.subpilot.utils;
 
 import co.subpilot.fee.dto.FeeBreakdown;
+import co.subpilot.internal.fee.entity.PlatformFeeDefault;
+import co.subpilot.internal.fee.repository.PlatformFeeDefaultRepository;
 import co.subpilot.merchant.entity.Merchant;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Calculates SubPilot's platform fee on a successful charge.
@@ -15,23 +19,28 @@ import org.springframework.stereotype.Service;
  *
  * Resolution order for the rate used:
  *   1. Merchant-level override (merchants.fee_bps / fee_fixed_minor) if set
- *   2. Platform default (subpilot.fees.default-bps / default-fixed-minor)
+ *   2. Platform default — DB-backed (platform_fee_default table),
+ *      admin-editable via PATCH /v1/internal/fees/default. The
+ *      subpilot.fees.default-bps / default-fixed-minor yml values are ONLY
+ *      the bootstrap seed for that row's first-ever creation — once the
+ *      row exists, yml is never consulted again, even if changed.
  *
  * Optional floor/cap (subpilot.fees.min-fee-minor / max-fee-minor) can be
  * configured to match real processor pricing pages (e.g. "1.5% + ₦100,
- * capped at ₦2,000").
- *
- * This class is pure / side-effect-free — PlatformFeeService is what
- * persists the result as a ledger row.
+ * capped at ₦2,000"). These remain yml-only in V1 — not part of the admin
+ * dashboard spec.
  */
 @Service
+@RequiredArgsConstructor
 public class PlatformFeePolicy {
 
+    private final PlatformFeeDefaultRepository platformFeeDefaultRepository;
+
     @Value("${subpilot.fees.default-bps:150}")
-    private int defaultBps;
+    private int bootstrapBps;
 
     @Value("${subpilot.fees.default-fixed-minor:10000}")
-    private long defaultFixedMinor;
+    private long bootstrapFixedMinor;
 
     @Value("${subpilot.fees.min-fee-minor:0}")
     private long minFeeMinor;
@@ -40,11 +49,28 @@ public class PlatformFeePolicy {
     private Long maxFeeMinor; // nullable — no cap if unset
 
     public FeeBreakdown calculate(Merchant merchant, long grossAmount) {
-        int bps = (merchant != null && merchant.getFeeBps() != null) ? merchant.getFeeBps() : defaultBps;
+        PlatformFeeDefault platformDefault = getOrBootstrapDefault();
+
+        int bps = (merchant != null && merchant.getFeeBps() != null) ? merchant.getFeeBps() : platformDefault.getFeeBps();
         long fixed = (merchant != null && merchant.getFeeFixedMinor() != null)
-                ? merchant.getFeeFixedMinor() : defaultFixedMinor;
+                ? merchant.getFeeFixedMinor() : platformDefault.getFixedFeeMinor();
 
         return calculate(grossAmount, bps, fixed);
+    }
+
+    /**
+     * Same bootstrap-on-first-read behavior as InternalFeeService.getOrBootstrap
+     * — duplicated rather than depending on the internal-admin package
+     * directly, since platform fee calculation is core billing logic that
+     * shouldn't be coupled to the admin dashboard feature's service layer.
+     */
+    @Transactional
+    public PlatformFeeDefault getOrBootstrapDefault() {
+        return platformFeeDefaultRepository.findById(PlatformFeeDefault.SINGLETON_ID)
+                .orElseGet(() -> platformFeeDefaultRepository.save(PlatformFeeDefault.builder()
+                        .feeBps(bootstrapBps)
+                        .fixedFeeMinor(bootstrapFixedMinor)
+                        .build()));
     }
 
     /**

@@ -30,11 +30,18 @@ import java.util.UUID;
  * retry-with-refresh) is delegated to NombaApiClient, which wraps
  * NombaAuthTokenManager's cached OAuth2 client-credentials token.
  *
- * Endpoints used (api.nomba.com/v1), verified against developer.nomba.com:
- *   POST /checkout/order                       — create a hosted checkout order (initiateCheckout)
- *   POST /checkout/tokenized-card-payment       — charge a previously tokenised card (chargeToken)
- *   GET  /transactions/accounts/single          — verify a transaction's final status (verifyTransaction)
- *   POST /refund                                — issue a refund (initiateRefund) — see caveat in initiateRefund()
+ * Endpoints used, verified against developer.nomba.com — base-url must now
+ * be HOST ONLY (e.g. https://api.nomba.com or https://sandbox.nomba.com),
+ * since every path below specifies its own version/environment prefix
+ * explicitly rather than relying on baseUrl to supply a fixed /v1:
+ *   POST /v1/auth/token/issue (or /sandbox equiv. — same path both envs)  — OAuth2 token (NombaAuthTokenManager)
+ *   POST {checkoutBasePath}/order                    — create a hosted checkout order (initiateCheckout)
+ *                                                        checkoutBasePath = /v1/checkout (prod) or /sandbox/checkout (sandbox)
+ *   POST {checkoutBasePath}/tokenized-card-payment    — charge a previously tokenised card (chargeToken)
+ *   GET  /v1/transactions/accounts/single             — verify a checkout (?orderReference=) or transfer (?transactionRef=) status
+ *   POST /v1/transfers/wallet                         — Nomba-to-Nomba wallet transfer (initiateTransfer)
+ *   POST /v2/transfers/bank                           — external bank account transfer (initiateBankTransfer) — note the /v2
+ *   POST /v1/refund                                   — issue a refund (initiateRefund) — see caveat in initiateRefund()
  *
  * Amounts: Nomba's API takes amounts as decimal strings in major currency
  * units (e.g. "10000.00" for NGN 10,000), while SubPilot stores everything
@@ -49,6 +56,22 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
 
     private final NombaApiClient apiClient;
     private final NombaApiProperties properties;
+
+    /**
+     * Sandbox and production diverge on checkout-family paths specifically
+     * (confirmed against developer.nomba.com/docs/products/accept-payment/sandbox-testing):
+     * sandbox uses /sandbox/checkout/..., production uses /v1/checkout/....
+     * Auth, transfers, and account-transaction lookups do NOT have this
+     * split — they stay under /v1 (or /v2 for bank transfers) regardless of
+     * properties.isSandbox(). base-url should now be HOST ONLY
+     * (e.g. https://api.nomba.com or https://sandbox.nomba.com) — every
+     * call below specifies its own full versioned path explicitly, since a
+     * single fixed baseUrl-includes-/v1 scheme can't represent /v1 and /v2
+     * (bank transfers) coexisting.
+     */
+    private String checkoutBasePath() {
+        return properties.isSandbox() ? "/sandbox/checkout" : "/v1/checkout";
+    }
 
     @Override
     public CheckoutResponse initiateCheckout(CheckoutRequest request) {
@@ -89,7 +112,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         body.put("tokenizeCard", true); // required so future renewals can charge without re-entering card details
 
         try {
-            JsonNode response = apiClient.post("/checkout/order", body);
+            JsonNode response = apiClient.post(checkoutBasePath() + "/order", body);
 
             if (!apiClient.isSuccessEnvelope(response)) {
                 log.warn("Nomba checkout order creation failed: {}", response);
@@ -126,7 +149,13 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         body.put("tokenKey", request.cardToken());
 
         try {
-            JsonNode response = apiClient.post("/checkout/tokenized-card-payment", body);
+            // Assumes the same sandbox/production checkout-path split as
+            // order creation — Nomba's sandbox docs confirm this pattern
+            // for /checkout/order and /checkout/transaction explicitly, but
+            // don't explicitly list tokenized-card-payment. Flagging as an
+            // assumption, not a confirmed fact, same spirit as the existing
+            // caveat on initiateRefund below.
+            JsonNode response = apiClient.post(checkoutBasePath() + "/tokenized-card-payment", body);
 
             if (!apiClient.isSuccessEnvelope(response)) {
                 String description = response != null ? response.path("description").asText("unknown_error") : "unknown_error";
@@ -190,10 +219,10 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
     @Override
     public VerificationResponse verifyTransaction(String orderReference) {
         try {
-            JsonNode response = apiClient.get("/transactions/accounts/single?orderReference=" + orderReference);
+            JsonNode response = apiClient.get("/v1/transactions/accounts/single?orderReference=" + orderReference);
 
             if (!apiClient.isSuccessEnvelope(response) || response.path("data").isNull()) {
-                return new VerificationResponse(false, orderReference, "NOT_FOUND");
+                return new VerificationResponse(false, orderReference, "Transaction doesn't exist yet or checkout abandoned");
             }
 
             JsonNode data = response.path("data");
@@ -208,6 +237,138 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         } catch (NombaApiException e) {
             log.error("Failed to verify Nomba transaction ref={}: {}", orderReference, e.getMessage());
             return new VerificationResponse(false, orderReference, "VERIFICATION_FAILED");
+        }
+    }
+
+    /**
+     * Confirmed against https://developer.nomba.com/products/transfers/transfer-between-accounts
+     * — POST /v1/transfers/wallet moves funds from SubPilot's parent Nomba
+     * account into a merchant's Nomba sub-account (receiverAccountId),
+     * which is the natural payout path since merchant onboarding already
+     * assumes a Nomba sub-account for checkout split payments (see
+     * CheckoutOrderRequest's splitRequest usage elsewhere in this class).
+     * Unlike /v2/transfers/bank (external bank transfer, needs
+     * accountNumber+bankCode — a separate onboarding flow SubPilot doesn't
+     * collect today), this fits the existing merchant model with no new
+     * onboarding fields beyond nombaPayoutAccountId itself.
+     *
+     * Note: per the docs example, "amount" here is a plain JSON number in
+     * major currency units (e.g. 3500 for ₦3,500), NOT the decimal-string
+     * convention used by /checkout/order and /refund — deliberately
+     * converted differently below (toMajorUnitsNumber, not
+     * toMajorUnitsString) to match.
+     */
+    /**
+     * Confirmed against developer.nomba.com/docs/products/transfers/transfer-to-banks
+     * — POST /v2/transfers/bank (note the /v2 — different from every other
+     * call in this class, which are all /v1). Request shape and response
+     * both confirmed directly from Nomba's own curl example, not inferred.
+     */
+    @Override
+    public TransferResponse initiateBankTransfer(BankTransferRequest request) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount", toMajorUnitsNumber(request.amountKobo()));
+        body.put("accountNumber", request.accountNumber());
+        body.put("accountName", request.accountName());
+        body.put("bankCode", request.bankCode());
+        body.put("merchantTxRef", request.idempotencyKey());
+        body.put("senderName", "SubPilot");
+        body.put("narration", request.narration() != null ? request.narration() : "SubPilot payout");
+
+        try {
+            JsonNode response = apiClient.post("/v2/transfers/bank", body);
+
+            if (!apiClient.isSuccessEnvelope(response)) {
+                String description = response != null ? response.path("description").asText("transfer_rejected") : "transfer_rejected";
+                return new TransferResponse(false, null, "FAILED", description);
+            }
+
+            String status = response.path("data").path("status").asText("");
+            String reference = response.path("data").path("id").asText(request.idempotencyKey());
+
+            if ("SUCCESS".equalsIgnoreCase(status)) {
+                return new TransferResponse(true, reference, status, null);
+            }
+            // PENDING/NEW/PENDING_BILLING/REFUND all fall through here —
+            // DisbursementService branches on TransferResponse.isPending()
+            // vs isRefunded() vs plain failure to decide what to do next.
+            return new TransferResponse(false, reference, status,
+                    "Transfer not confirmed successful (status=" + status + ")");
+
+        } catch (NombaApiException e) {
+            log.error("Bank transfer failed for merchantTxRef={}: {}", request.idempotencyKey(), e.getMessage());
+            return new TransferResponse(false, null, "FAILED", "Could not reach Nomba: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Confirmed against Nomba's transfer-to-banks docs: for a parent-account
+     * transfer, requery via GET /v1/transactions/accounts/single?transactionRef=<merchantTxRef>
+     * — same endpoint as checkout verification, different query param.
+     */
+    @Override
+    public TransferResponse verifyTransfer(String merchantTxRef) {
+        try {
+            JsonNode response = apiClient.get("/v1/transactions/accounts/single?transactionRef=" + merchantTxRef);
+
+            if (!apiClient.isSuccessEnvelope(response) || response.path("data").isNull()) {
+                return new TransferResponse(false, merchantTxRef, "NOT_FOUND", "No transaction found for this reference yet");
+            }
+
+            JsonNode data = response.path("data");
+            String status = data.path("status").asText("UNKNOWN");
+            String reference = data.path("id").asText(merchantTxRef);
+
+            if ("SUCCESS".equalsIgnoreCase(status)) {
+                return new TransferResponse(true, reference, status, null);
+            }
+            return new TransferResponse(false, reference, status, "Transfer status=" + status);
+
+        } catch (NombaApiException e) {
+            log.error("Failed to verify transfer merchantTxRef={}: {}", merchantTxRef, e.getMessage());
+            return new TransferResponse(false, merchantTxRef, "VERIFICATION_FAILED", e.getMessage());
+        }
+    }
+
+    /** Transfers API takes a plain major-units number (e.g. 3500), unlike checkout/refund's decimal-string convention — see initiateTransfer's javadoc. */
+    private java.math.BigDecimal toMajorUnitsNumber(long minorUnits) {
+        return java.math.BigDecimal.valueOf(minorUnits, 2); // kobo -> naira, 2 decimal places
+    }
+
+    @Override
+    public BankLookupResponse lookupBankAccount(String accountNumber, String bankCode) {
+        Map<String, Object> body = Map.of("accountNumber", accountNumber, "bankCode", bankCode);
+        try {
+            JsonNode response = apiClient.post("/v1/transfers/bank/lookup", body);
+
+            if (!apiClient.isSuccessEnvelope(response)) {
+                return new BankLookupResponse(false, accountNumber, null,
+                        response != null ? response.path("description").asText("Account not found") : "Account not found");
+            }
+
+            String resolvedName = response.path("data").path("accountName").asText(null);
+            return new BankLookupResponse(true, accountNumber, resolvedName, null);
+
+        } catch (NombaApiException e) {
+            log.error("Bank account lookup failed for accountNumber={} bankCode={}: {}", accountNumber, bankCode, e.getMessage());
+            return new BankLookupResponse(false, accountNumber, null, "Could not reach Nomba: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public List<BankInfo> listBanks() {
+        try {
+            JsonNode response = apiClient.get("/v1/transfers/banks");
+            if (!apiClient.isSuccessEnvelope(response)) return List.of();
+
+            List<BankInfo> banks = new java.util.ArrayList<>();
+            for (JsonNode bank : response.path("data")) {
+                banks.add(new BankInfo(bank.path("name").asText(""), bank.path("bankCode").asText("")));
+            }
+            return banks;
+        } catch (NombaApiException e) {
+            log.error("Failed to fetch bank list: {}", e.getMessage());
+            return List.of();
         }
     }
 
@@ -243,7 +404,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
             // sandbox account exposes a different route — everything else
             // (idempotency key, amount conversion, response handling) is
             // already correct and won't need to change.
-            JsonNode response = apiClient.post("/refund", body);
+            JsonNode response = apiClient.post("/v1/refund", body);
 
             if (!apiClient.isSuccessEnvelope(response)) {
                 String description = response != null ? response.path("description").asText("refund_rejected") : "refund_rejected";

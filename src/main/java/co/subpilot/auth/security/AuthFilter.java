@@ -39,8 +39,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AuthFilter extends OncePerRequestFilter {
 
-    /** Item 4 — set when a request authenticated via the _subpilot_session cookie, read by CsrfProtectionFilter.
-     * Never set for API key / raw-header JWT auth, which are not CSRF-vulnerable. */
+    /** Item 4 — set when a request authenticated via the _subpilot_session cookie, read by CsrfProtectionFilter. Never set for API key / raw-header JWT auth, which are not CSRF-vulnerable. */
     public static final String COOKIE_AUTH_ATTRIBUTE = "subpilot.cookieAuth";
 
     private final JwtService jwtService;
@@ -50,6 +49,20 @@ public class AuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
+        // Symmetric with InternalAdminAuthFilter's own guard — see its
+        // javadoc. Merchant auth must never even attempt to authenticate
+        // an /v1/internal/** request, regardless of what cookies happen
+        // to be present.
+        // getServletPath(), NOT getRequestURI() — see CsrfProtectionFilter's
+        // comment on the same fix. Without this, this exclusion silently
+        // never matched in any deployment with server.servlet.context-path
+        // set (e.g. "/api" in production), meaning AuthFilter was actually
+        // attempting to authenticate /v1/internal/** requests too.
+        if (request.getServletPath().startsWith("/v1/internal/")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         try {
             // Gap 6 — dashboard sessions authenticate via the HttpOnly
             // _subpilot_session cookie. Checked first so a browser session

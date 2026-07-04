@@ -16,8 +16,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Maps to /app/plans and /app/plans/:id in the frontend.
@@ -55,12 +61,52 @@ public class PlanController {
     })
     @GetMapping
     public ResponseEntity<Page<PlanDtos.PlanResponse>> list(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int perPage
-    ) {
+            @RequestParam(defaultValue = "20") int perPage,
+            // Manually parsed rather than a Spring-resolved Pageable param —
+            // Spring's PageableHandlerMethodArgumentResolver expects a
+            // "size" query param by default, which would silently break
+            // the existing "perPage" contract this endpoint already has.
+            // Renaming perPage->size to get Spring's free Pageable
+            // resolution isn't worth breaking existing consumers over.
+            @RequestParam(required = false) String sort) {
         String merchantId = TenantContext.requireMerchantId();
-        Page<Plan> plans = planService.list(merchantId, PageRequest.of(page, Math.min(perPage, 100)));
+        Sort sortOrder = parseSort(sort);
+        var pageable = PageRequest.of(page, Math.min(perPage, 100), sortOrder);
+        Page<Plan> plans = planService.search(merchantId, q, status, pageable);
         return ResponseEntity.ok(plans.map(p -> toResponse(p, merchantId)));
+    }
+
+    /**
+     * "?sort=field,direction" — repeatable for multi-field sort, matching
+     * the shape Spring's own resolver would have produced, just parsed by
+     * hand to preserve the existing perPage param name. Unknown/malformed
+     * entries are skipped rather than erroring — a bad sort param
+     * shouldn't break an otherwise-valid list request.
+     */
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by("createdAt").descending();
+        }
+        // amountKobo is the frontend DTO's field name for this — the actual
+        // JPA entity property is `amount` (see Plan.java: "private long
+        // amount; // minor units (kobo)"). Sort.by operates on entity
+        // property names, so this alias is required or the query throws
+        // PropertyReferenceException at runtime.
+        Map<String, String> fieldAliases = Map.of("amountKobo", "amount");
+        Set<String> allowedFields = Set.of("name", "amountKobo", "trialDays", "status", "createdAt");
+        List<Sort.Order> orders = new ArrayList<>();
+        for (String clause : sort.split(";")) {
+            String[] parts = clause.split(",");
+            String requestedField = parts[0].trim();
+            if (!allowedFields.contains(requestedField)) continue;
+            String entityField = fieldAliases.getOrDefault(requestedField, requestedField);
+            boolean desc = parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim());
+            orders.add(desc ? Sort.Order.desc(entityField) : Sort.Order.asc(entityField));
+        }
+        return orders.isEmpty() ? Sort.by("createdAt").descending() : Sort.by(orders);
     }
 
     @GetMapping("/{id}")

@@ -31,6 +31,9 @@ public final class WebhookEventCatalogue {
             case "REFUND_CREATED" -> "refund.created";
             case "REFUND_SUCCEEDED" -> "refund.succeeded";
             case "REFUND_FAILED" -> "refund.failed";
+            case "PAYOUT_TRIGGERED" -> "payout.triggered";
+            case "PAYOUT_SUCCEEDED" -> "payout.succeeded";
+            case "PAYOUT_FAILED" -> "payout.failed";
             default -> internalType.toLowerCase().replace('_', '.');
         };
     }
