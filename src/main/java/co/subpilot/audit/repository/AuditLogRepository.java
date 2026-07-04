@@ -20,7 +20,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
             "AND (:resourceType IS NULL OR a.resourceType = :resourceType) " +
             "AND (:resourceId IS NULL OR a.resourceId = :resourceId) " +
             "AND (:action IS NULL OR a.action = :action) " +
-            "AND (:q IS NULL OR LOWER(a.resourceId) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(a.actorId) LIKE LOWER(CONCAT('%', :q, '%'))) " +
+            "AND (:q IS NULL OR LOWER(a.resourceId) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR LOWER(a.actorId) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))) " +
             "ORDER BY a.createdAt DESC")
     Page<AuditLog> search(@Param("merchantId") String merchantId,
                           @Param("resourceType") String resourceType,
