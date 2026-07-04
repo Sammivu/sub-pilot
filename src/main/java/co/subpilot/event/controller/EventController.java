@@ -19,9 +19,10 @@ public class EventController {
 
     @GetMapping
     public ResponseEntity<Page<Event>> list(@RequestParam(required = false) String type,
-            @RequestParam(required = false) String subscriptionId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
-        return ResponseEntity.ok(eventService.list(type, subscriptionId, page, size));
+                                            @RequestParam(required = false) String subscriptionId,
+                                            @RequestParam(required = false) String q,
+                                            @RequestParam(defaultValue = "0") int page,
+                                            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(eventService.list(type, subscriptionId, q, page, size));
     }
 }

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +64,17 @@ public class RefundService {
         if (!invoice.isPaid()) {
             throw new BusinessRuleException("invoice_not_paid",
                     "Only a paid invoice can be refunded (current status: " + invoice.getStatus() + ").");
+        }
+        if (invoice.getPaidAt() == null) {
+            throw new BusinessRuleException("invoice_missing_payment_date", "The payment timestamp for this invoice is unavailable."
+            );
+        }
+
+        Instant refundDeadline = invoice.getPaidAt().plus(24, ChronoUnit.HOURS);
+        if (Instant.now().isAfter(refundDeadline)) {
+            throw new BusinessRuleException("refund_window_expired",
+                    "Refunds can only be requested within 24 hours of payment."
+            );
         }
 
         long alreadyRefunded = refundRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId).stream()

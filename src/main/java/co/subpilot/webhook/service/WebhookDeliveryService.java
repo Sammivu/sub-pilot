@@ -91,7 +91,13 @@ public class WebhookDeliveryService {
         delivery.setEndpointId(endpoint.getId());
         delivery.setEventId(event.getId());
         delivery.setStatus(WebhookDeliveryStatus.PENDING);
-        return deliveryRepository.save(delivery);
+        WebhookDelivery saved = deliveryRepository.save(delivery);
+        log.info(
+                "Webhook delivery created id={} merchant={} endpoint={}",
+                saved.getId(), saved.getMerchantId(), saved.getEndpointId()
+        );
+        log.info("Exists after save = {}", deliveryRepository.existsById(saved.getId()));
+        return saved;
     }
 
     private void attemptDelivery(WebhookDelivery delivery, WebhookEndpoint endpoint, Event event, String publicEventName) {
