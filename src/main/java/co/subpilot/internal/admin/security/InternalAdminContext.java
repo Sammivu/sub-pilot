@@ -1,5 +1,7 @@
 package co.subpilot.internal.admin.security;
 
+import co.subpilot.internal.admin.InternalAdminRole;
+
 /**
  * Thread-local holder for the current authenticated internal admin —
  * mirrors TenantContext's design exactly (co.subpilot.common.tenant),
@@ -37,7 +39,7 @@ public final class InternalAdminContext {
     }
 
     public static boolean isSuperAdmin() {
-        return co.subpilot.internal.admin.InternalAdminRole.SUPER_ADMIN.equals(ROLE.get());
+        return InternalAdminRole.SUPER_ADMIN.equals(ROLE.get());
     }
 
     public static void clear() {

@@ -16,6 +16,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.WebUtils;
 
 import java.io.IOException;
 import java.security.MessageDigest;
@@ -64,6 +65,19 @@ public class AuthFilter extends OncePerRequestFilter {
         }
 
         try {
+            // Dashboard sessions authenticate via the HttpOnly
+            // _subpilot_session cookie. We look up the cookie by name
+            // directly rather than iterating over all cookies, which
+            // remains safe even if multiple session cookies now use Path=/.
+//            Cookie sessionCookie = WebUtils.getCookie(request, SessionCookie.NAME);
+//
+//            if (sessionCookie != null) {
+//                authenticateJwt(sessionCookie.getValue());
+//                if (SecurityContextHolder.getContext().getAuthentication() != null) {
+//                    request.setAttribute(COOKIE_AUTH_ATTRIBUTE, true);
+//                }
+//            }
+
             // Gap 6 — dashboard sessions authenticate via the HttpOnly
             // _subpilot_session cookie. Checked first so a browser session
             // never needs to send an Authorization header at all. The
