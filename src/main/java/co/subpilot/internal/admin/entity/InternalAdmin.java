@@ -1,5 +1,6 @@
 package co.subpilot.internal.admin.entity;
 
+import com.github.f4b6a3.ulid.UlidCreator;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -49,7 +50,7 @@ public class InternalAdmin {
     @PrePersist
     void prePersist() {
         Instant now = Instant.now();
-        if (id == null) id = com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString();
+        if (id == null) id = UlidCreator.getMonotonicUlid().toString();
         createdAt = now;
         updatedAt = now;
     }
