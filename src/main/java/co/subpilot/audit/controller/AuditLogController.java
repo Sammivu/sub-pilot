@@ -28,22 +28,12 @@ public class AuditLogController {
             @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) String resourceId,
             @RequestParam(required = false) String action,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int perPage
     ) {
         String merchantId = TenantContext.requireMerchantId();
         var pageable = PageRequest.of(page, Math.min(perPage, 100), Sort.by("createdAt").descending());
-
-        Page<AuditLog> result;
-        if (resourceType != null && resourceId != null) {
-            result = auditLogRepository.findByMerchantIdAndResourceTypeAndResourceIdOrderByCreatedAtDesc(
-                    merchantId, resourceType, resourceId, pageable);
-        } else if (action != null) {
-            result = auditLogRepository.findByMerchantIdAndActionOrderByCreatedAtDesc(merchantId, action, pageable);
-        } else {
-            result = auditLogRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId, pageable);
-        }
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(auditLogRepository.search(merchantId, resourceType, resourceId, action, q, pageable));
     }
 }

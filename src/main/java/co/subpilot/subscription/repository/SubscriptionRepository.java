@@ -26,6 +26,26 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Stri
 
     Page<Subscription> findByCustomerIdAndMerchantId(String customerId, String merchantId, Pageable pageable);
 
+    /**
+     * customerId is a plain String FK on Subscription (no @ManyToOne), so
+     * the q-search needs an explicit non-association JOIN — Subscription
+     * has no entity-level relationship to Customer to navigate via dot
+     * notation. All filters are optional (null = don't filter on that
+     * field) — covers status/planId/customerId/q in one query rather than
+     * a combinatorial explosion of findByX methods.
+     */
+    @Query("SELECT s FROM Subscription s JOIN Customer c ON c.id = s.customerId WHERE s.merchantId = :merchantId " +
+            "AND (:status IS NULL OR s.status = :status) " +
+            "AND (:planId IS NULL OR s.planId = :planId) " +
+            "AND (:customerId IS NULL OR s.customerId = :customerId) " +
+            "AND (:q IS NULL OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(c.email) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Subscription> search(@Param("merchantId") String merchantId,
+                              @Param("status") SubscriptionStatus status,
+                              @Param("planId") String planId,
+                              @Param("customerId") String customerId,
+                              @Param("q") String q,
+                              Pageable pageable);
+
     List<Subscription> findByCustomerId(String customerId);
 
     /**
