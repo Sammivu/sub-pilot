@@ -1,6 +1,7 @@
 package co.subpilot.merchant.entity;
 
 import co.subpilot.common.entity.BaseEntity;
+import co.subpilot.merchant.MerchantStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -60,4 +61,10 @@ public class Merchant extends BaseEntity {
 
     @Column(name = "payout_account_name")
     private String payoutAccountName;
+
+
+    /** active | under_review | suspended — see MerchantStatus. Managed only via InternalMerchantService (admin dashboard), never by the merchant themselves. */
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private String status = MerchantStatus.UNDER_REVIEW;
 }

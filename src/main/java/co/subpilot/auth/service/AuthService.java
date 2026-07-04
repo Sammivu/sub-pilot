@@ -10,6 +10,7 @@ import co.subpilot.common.exception.BusinessRuleException;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.common.tenant.TenantContext;
 import co.subpilot.dunning.service.DunningTriggerService;
+import co.subpilot.internal.admin.service.InternalAdminNotificationService;
 import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final DunningTriggerService dunningTriggerService;
+    private final InternalAdminNotificationService internalAdminNotificationService;
 
     @Value("${subpilot.jwt.refresh-expiration-ms}")
     private long refreshExpirationMs;
@@ -52,7 +54,7 @@ public class AuthService {
         String slug = generateMerchantSlug(businessName);
 
         Merchant merchant = merchantRepository.save(Merchant.builder()
-                .businessName(req.businessName())
+                .businessName(businessName)
                 .email(req.email())
                 .passwordHash(passwordEncoder.encode(req.password()))
                 .slug(slug)
@@ -74,6 +76,15 @@ public class AuthService {
         // not just after their first payment failure — otherwise the
         // dunning settings screen has nothing to show a brand-new merchant.
         dunningTriggerService.createDefaultCampaign(merchant.getId());
+
+        // FYI only — merchant.status stays 'active' from creation (see
+        // Merchant's @Builder.Default), so this notification does NOT gate
+        // the merchant's ability to operate. Whether new signups should
+        // instead start 'under_review' pending admin approval is a real
+        // product decision, deliberately not made here — see the response
+        // this was built alongside for that flag.
+        internalAdminNotificationService.notifyNewMerchantSignup(
+                merchant.getId(), merchant.getBusinessName(), merchant.getEmail());
 
         log.info("New merchant signed up: {} ({})", merchant.getBusinessName(), merchant.getId());
 

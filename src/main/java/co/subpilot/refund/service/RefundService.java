@@ -5,6 +5,7 @@ import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.common.tenant.TenantContext;
 import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
+import co.subpilot.internal.admin.service.InternalAdminNotificationService;
 import co.subpilot.fee.service.PlatformFeeService;
 import co.subpilot.invoice.InvoiceStatus;
 import co.subpilot.invoice.entity.Invoice;
@@ -50,6 +51,7 @@ public class RefundService {
     private final PlatformFeeService platformFeeService;
     private final NombaPaymentGateway nomba;
     private final EventService eventService;
+    private final InternalAdminNotificationService notificationService;
 
     @Transactional
     public Refund createRefund(String invoiceId, Long requestedAmount, String reason, String requestedByUserId) {
@@ -99,6 +101,8 @@ public class RefundService {
 
         eventService.record(merchantId, EventType.REFUND_CREATED, "refund", refund.getId(),
                 Map.of("invoiceId", invoiceId, "amount", amount));
+
+        notificationService.notifyRefundPendingApproval(refund.getId(), merchantId, amount);
 
         log.info("Refund requested, awaiting admin approval: merchant={} invoice={} refund={} amount={}",
                 merchantId, invoiceId, refund.getId(), amount);

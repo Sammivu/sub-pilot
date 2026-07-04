@@ -1,5 +1,6 @@
 package co.subpilot.auth.security;
 
+import co.subpilot.internal.admin.security.InternalAdminAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,7 @@ public class SecurityConfig {
 
     private final AuthFilter authFilter;
     private final CsrfProtectionFilter csrfProtectionFilter;
-    private final co.subpilot.common.admin.AdminApiKeyFilter adminApiKeyFilter;
+    private final InternalAdminAuthFilter internalAdminAuthFilter;
     private final CorsConfigurationSource corsConfigurationSource;
 
     @Bean
@@ -48,11 +49,13 @@ public class SecurityConfig {
                         .requestMatchers("/v1/portal/**").permitAll()
                         // Inbound Nomba webhooks
                         .requestMatchers(HttpMethod.POST, "/v1/webhooks/nomba").permitAll()
-                        // Admin endpoints — auth handled entirely by AdminApiKeyFilter
-                        // (static shared secret, not a merchant JWT), so this must be
-                        // permitAll here or AuthFilter's "no valid session" 401 would
-                        // fire first and AdminApiKeyFilter would never even run.
-                        .requestMatchers("/v1/admin/**").permitAll()
+                        // Internal admin login is the one internal route
+                        // reachable with no session yet — everything else
+                        // under /v1/internal/** falls through to
+                        // anyRequest().authenticated() below, which
+                        // InternalAdminAuthFilter satisfies exactly the
+                        // same way AuthFilter does for merchant routes.
+                        .requestMatchers(HttpMethod.POST, "/v1/internal/auth/login").permitAll()
                         //Swagger
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // Actuator
@@ -64,7 +67,11 @@ public class SecurityConfig {
                 // Item 4 — runs immediately after AuthFilter so it can read
                 // the COOKIE_AUTH_ATTRIBUTE AuthFilter just set.
                 .addFilterAfter(csrfProtectionFilter, AuthFilter.class)
-                .addFilterBefore(adminApiKeyFilter, AuthFilter.class);
+                // Independent of AuthFilter's position — see both filters'
+                // mutual path-exclusion javadocs for why order between
+                // these two specifically doesn't matter (they can never
+                // both act on the same request).
+                .addFilterBefore(internalAdminAuthFilter, AuthFilter.class);
 
         return http.build();
     }

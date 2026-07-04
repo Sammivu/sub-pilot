@@ -45,12 +45,18 @@ public class CsrfProtectionFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                     HttpServletResponse response,
-                                     FilterChain chain) throws ServletException, IOException {
+                                    HttpServletResponse response,
+                                    FilterChain chain) throws ServletException, IOException {
 
         boolean cookieAuthenticated = Boolean.TRUE.equals(request.getAttribute(AuthFilter.COOKIE_AUTH_ATTRIBUTE));
         boolean mutating = MUTATING_METHODS.contains(request.getMethod());
-        boolean exempt = request.getRequestURI().startsWith(EXEMPT_PREFIX);
+        // getServletPath(), NOT getRequestURI() — the latter includes any
+        // configured server.servlet.context-path (e.g. "/api" in
+        // production: real requests arrive as /api/v1/auth/refresh), which
+        // meant this exemption check silently never matched in production,
+        // and every /v1/auth/** call was incorrectly subjected to the CSRF
+        // check — the exact cause of the empty 403 on /auth/refresh.
+        boolean exempt = request.getServletPath().startsWith(EXEMPT_PREFIX);
 
         if (cookieAuthenticated && mutating && !exempt) {
             String headerToken = request.getHeader(SessionCookie.CSRF_HEADER);
@@ -59,12 +65,28 @@ public class CsrfProtectionFilter extends OncePerRequestFilter {
             if (headerToken == null || cookieToken == null || !constantTimeEquals(headerToken, cookieToken)) {
                 log.warn("CSRF check failed for {} {} — missing or mismatched {} header",
                         request.getMethod(), request.getRequestURI(), SessionCookie.CSRF_HEADER);
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, "CSRF token missing or invalid.");
+                writeForbidden(response, "csrf_token_invalid", "CSRF token missing or invalid.");
                 return;
             }
         }
 
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Writes the error body directly rather than response.sendError(...) —
+     * sendError() forwards to Spring Boot's default /error handler, which
+     * suppresses the custom message unless server.error.include-message=always
+     * is configured. That produced empty-bodied 403s with no indication of
+     * what actually failed. Matches GlobalExceptionHandler's ErrorResponse
+     * shape so this filter's errors look identical to every other API error.
+     */
+    private void writeForbidden(HttpServletResponse response, String code, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("application/json");
+        response.getWriter().write(String.format(
+                "{\"error\":{\"code\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}}",
+                code, message, java.time.Instant.now()));
     }
 
     private String readCsrfCookie(HttpServletRequest request) {
