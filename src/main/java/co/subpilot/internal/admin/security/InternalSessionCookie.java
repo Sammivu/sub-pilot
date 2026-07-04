@@ -11,7 +11,7 @@ public final class InternalSessionCookie {
      * somehow had a bug, the browser itself won't send this cookie to
      * /v1/plans, /v1/subscriptions, etc.
      */
-    public static final String PATH = "/v1/internal";
+    public static final String PATH = "/";
 
     private InternalSessionCookie() {}
 }
