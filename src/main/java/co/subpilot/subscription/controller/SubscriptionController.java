@@ -37,10 +37,12 @@ public class SubscriptionController {
     public ResponseEntity<Page<Subscription>> list(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String planId,
+            @RequestParam(required = false) String customerId,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(subscriptionService.list(status, planId, pageable));
+        return ResponseEntity.ok(subscriptionService.list(status, planId, customerId, q, pageable));
     }
 
     @GetMapping("/v1/subscriptions/{subscriptionId}")

@@ -84,17 +84,14 @@ public class EventService {
         return record(merchantId, type, resourceType, resourceId, payload);
     }
 
-    public Page<Event> list(String type, String subscriptionId, int page, int perPage) {
+    public Page<Event> list(String type, String subscriptionId, String q, int page, int perPage) {
         String merchantId = TenantContext.requireMerchantId();
         Pageable pageable = PageRequest.of(page, Math.min(perPage, 100), Sort.by("createdAt").descending());
 
-        if (subscriptionId != null && !subscriptionId.isBlank()) {
-            return eventRepository.findByMerchantIdAndSubscriptionIdOrderByCreatedAtDesc(merchantId, subscriptionId, pageable);
-        }
+        String normalizedType = (type != null && !type.isBlank()) ? type : null;
+        String normalizedSubscriptionId = (subscriptionId != null && !subscriptionId.isBlank()) ? subscriptionId : null;
+        String normalizedQ = (q != null && !q.isBlank()) ? q : null;
 
-        if (type != null && !type.isBlank()) {
-            return eventRepository.findByMerchantIdAndTypeOrderByCreatedAtDesc(merchantId, type, pageable);
-        }
-        return eventRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId, pageable);
+        return eventRepository.search(merchantId, normalizedType, normalizedSubscriptionId, normalizedQ, pageable);
     }
 }

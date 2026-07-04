@@ -51,4 +51,17 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
     // billing-cycle invoices.
     Optional<Invoice> findBySubscriptionIdAndProrationNoteStartingWith(String subscriptionId, String prefix);
 
+    /**
+     * customerId is a plain String FK (no @ManyToOne on Invoice, same
+     * situation as Subscription) — explicit non-association JOIN needed
+     * for the email half of the search.
+     */
+    @Query("SELECT i FROM Invoice i JOIN Customer c ON c.id = i.customerId WHERE i.merchantId = :merchantId " +
+            "AND (:status IS NULL OR i.status = :status) " +
+            "AND (:q IS NULL OR LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(c.email) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Invoice> search(@Param("merchantId") String merchantId,
+                         @Param("status") String status,
+                         @Param("q") String q,
+                         Pageable pageable);
+
 }

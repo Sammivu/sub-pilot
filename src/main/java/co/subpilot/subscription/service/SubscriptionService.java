@@ -244,14 +244,10 @@ public class SubscriptionService {
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
-    public Page<Subscription> list(String status, String planId, Pageable pageable) {
+    public Page<Subscription> list(String status, String planId, String customerId, String q, Pageable pageable) {
         String merchantId = TenantContext.requireMerchantId();
-        if (status != null) {
-            SubscriptionStatus parsed = SubscriptionStatus.valueOf(status);
-            return subscriptionRepository.findByMerchantIdAndStatus(merchantId, parsed, pageable);
-        }
-        if (planId != null) return subscriptionRepository.findByMerchantIdAndPlanId(merchantId, planId, pageable);
-        return subscriptionRepository.findByMerchantId(merchantId, pageable);
+        SubscriptionStatus parsedStatus = status != null ? SubscriptionStatus.valueOf(status) : null;
+        return subscriptionRepository.search(merchantId, parsedStatus, planId, customerId, q, pageable);
     }
 
     public Subscription getById(String subscriptionId) {

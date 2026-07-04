@@ -436,11 +436,14 @@ public class WebhookController {
 
     @GetMapping("/v1/webhooks/deliveries")
     public ResponseEntity<Page<WebhookDelivery>> listDeliveries(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String endpointId,
+            @RequestParam(required = false) String eventType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         String merchantId = TenantContext.requireMerchantId();
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(deliveryRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId, pageable));
+        return ResponseEntity.ok(deliveryRepository.search(merchantId, status, endpointId, eventType, pageable));
     }
 
     // ── Inbound Nomba webhook handler ─────────────────────────────────────────
