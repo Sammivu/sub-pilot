@@ -20,7 +20,7 @@ public interface EventRepository extends JpaRepository<Event, String> {
     @org.springframework.data.jpa.repository.Query("SELECT e FROM Event e WHERE e.merchantId = :merchantId " +
             "AND (:type IS NULL OR e.type = :type) " +
             "AND (:subscriptionId IS NULL OR e.subscriptionId = :subscriptionId) " +
-            "AND (:q IS NULL OR LOWER(e.subscriptionId) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(e.resourceId) LIKE LOWER(CONCAT('%', :q, '%'))) " +
+            "AND (:q IS NULL OR LOWER(e.subscriptionId) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) OR LOWER(e.resourceId) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))) " +
             "ORDER BY e.createdAt DESC")
     Page<Event> search(@Param("merchantId") String merchantId,
                        @Param("type") String type,

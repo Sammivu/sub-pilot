@@ -16,7 +16,7 @@ public interface PlanRepository extends JpaRepository<Plan, String> {
 
     /** q (name, case-insensitive substring) and status both optional — null means "don't filter on that field". */
     @Query("SELECT p FROM Plan p WHERE p.merchantId = :merchantId " +
-            "AND (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))) " +
+            "AND (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) " +
             "AND (:status IS NULL OR p.status = :status)")
     Page<Plan> search(@Param("merchantId") String merchantId,
                       @Param("q") String q,
