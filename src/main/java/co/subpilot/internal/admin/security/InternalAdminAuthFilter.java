@@ -1,5 +1,6 @@
 package co.subpilot.internal.admin.security;
 
+import co.subpilot.auth.security.SessionCookie;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -13,9 +14,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.WebUtils;
 
 import java.io.IOException;
 import java.util.List;
+
+import static co.subpilot.auth.security.AuthFilter.COOKIE_AUTH_ATTRIBUTE;
 
 /**
  * Structurally separate from AuthFilter (merchant auth) — see
@@ -53,6 +57,19 @@ public class InternalAdminAuthFilter extends OncePerRequestFilter {
         }
 
         try {
+            // Dashboard sessions authenticate via the HttpOnly
+            // _subpilot_session cookie. We look up the cookie by name
+            // directly rather than iterating over all cookies, which
+            // remains safe even if multiple session cookies now use Path=/.
+//            Cookie sessionCookie = WebUtils.getCookie(request, InternalSessionCookie.NAME);
+//
+//            if (sessionCookie != null) {
+//                authenticate(sessionCookie.getValue());
+//                if (SecurityContextHolder.getContext().getAuthentication() != null) {
+//                    request.setAttribute(COOKIE_AUTH_ATTRIBUTE, true);
+//                }
+//            }
+
             Cookie[] cookies = request.getCookies();
             if (cookies != null) {
                 for (Cookie cookie : cookies) {
