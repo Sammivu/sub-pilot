@@ -19,6 +19,7 @@ import co.subpilot.subscription.dto.SubscriptionDtos;
 import co.subpilot.subscription.entity.Subscription;
 import co.subpilot.subscription.enums.SubscriptionStatus;
 import co.subpilot.subscription.repository.SubscriptionRepository;
+import co.subpilot.utils.PhoneUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -54,8 +56,7 @@ public class SubscriptionService {
      * Returns a Nomba checkout URL to redirect the subscriber to.
      */
     @Transactional
-    public SubscriptionDtos.CheckoutInitResponse initiateCheckout(
-            String merchantId, String planId,
+    public SubscriptionDtos.CheckoutInitResponse initiateCheckout(String merchantId, String planId,
             SubscriptionDtos.CheckoutRequest req) {
 
         Plan plan = planRepository.findByIdAndMerchantId(planId, merchantId)
@@ -63,13 +64,14 @@ public class SubscriptionService {
         if (!plan.isPublished()) {
             throw new BusinessRuleException("plan_not_published", "This plan is not available for subscription.");
         }
-
-        Customer customer = customerRepository.findByMerchantIdAndEmail(merchantId, req.email())
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        String phone = PhoneUtils.normalize(req.phone(), "NG");
+        Customer customer = customerRepository.findByMerchantIdAndEmail(merchantId, email)
                 .orElseGet(() -> customerRepository.save(Customer.builder()
                         .merchantId(merchantId)
-                        .fullName(req.fullName())
-                        .email(req.email())
-                        .phone(req.phone())
+                        .fullName(req.fullName().trim())
+                        .email(email)
+                        .phone(phone)
                         .build()));
 
         Instant now = Instant.now();

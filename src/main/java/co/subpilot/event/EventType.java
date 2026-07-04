@@ -56,4 +56,10 @@ public final class EventType {
     public static final String REFUND_CREATED = "REFUND_CREATED";
     public static final String REFUND_SUCCEEDED = "REFUND_SUCCEEDED";
     public static final String REFUND_FAILED = "REFUND_FAILED";
+    public static final String REFUND_REJECTED = "REFUND_REJECTED";
+
+    // Payout / disbursement
+    public static final String PAYOUT_TRIGGERED = "PAYOUT_TRIGGERED";
+    public static final String PAYOUT_SUCCEEDED = "PAYOUT_SUCCEEDED";
+    public static final String PAYOUT_FAILED = "PAYOUT_FAILED";
 }

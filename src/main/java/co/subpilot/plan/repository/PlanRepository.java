@@ -6,12 +6,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
 public interface PlanRepository extends JpaRepository<Plan, String> {
     Page<Plan> findByMerchantId(String merchantId, Pageable pageable);
     Page<Plan> findByMerchantIdAndStatus(String merchantId, PlanStatus status, Pageable pageable);
+
+    /** q (name, case-insensitive substring) and status both optional — null means "don't filter on that field". */
+    @Query("SELECT p FROM Plan p WHERE p.merchantId = :merchantId " +
+            "AND (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))) " +
+            "AND (:status IS NULL OR p.status = :status)")
+    Page<Plan> search(@Param("merchantId") String merchantId,
+                      @Param("q") String q,
+                      @Param("status") PlanStatus status,
+                      Pageable pageable);
     Optional<Plan> findByIdAndMerchantId(String id, String merchantId);
     Optional<Plan> findByMerchantIdAndSlug(String merchantId, String slug);
     // For public plan page - by merchant slug + plan slug

@@ -2,6 +2,8 @@ package co.subpilot.nomba;
 
 import co.subpilot.nomba.dto.VerificationResponse;
 
+import java.util.List;
+
 /**
  * Abstraction over Nomba's payment APIs.
  *
@@ -35,6 +37,42 @@ public interface NombaPaymentGateway {
      * Initiate a refund via Nomba Transfers API.
      */
     RefundResponse initiateRefund(RefundRequest request);
+
+    /**
+     * Initiate a payout to a merchant's Nomba account/wallet via the
+     * Nomba Transfers API — distinct from initiateRefund, which reverses a
+     * charge at the issuer level. This moves already-settled platform
+     * balance out to the merchant. Used by DisbursementService.
+     */
+    /**
+     * Initiate a payout to a merchant's external bank account via
+     * POST /v2/transfers/bank — NOT the Nomba-to-Nomba wallet transfer
+     * (that requires the recipient to already have a Nomba accountId,
+     * which arbitrary merchants don't have — see Merchant.java's javadoc
+     * on the payout fields). Used by DisbursementService.
+     */
+    TransferResponse initiateBankTransfer(BankTransferRequest request);
+
+    /**
+     * Confirmed against developer.nomba.com/docs/products/transfers/bank-account-lookup
+     * — POST /v1/transfers/bank/lookup. Resolves accountNumber+bankCode to
+     * the real account holder's name at the bank, BEFORE ever saving a
+     * merchant's payout details or sending real money. Never trust a
+     * merchant-typed accountName — always use what this returns.
+     */
+    BankLookupResponse lookupBankAccount(String accountNumber, String bankCode);
+
+    /** GET /v1/transfers/banks — bank name -> bankCode list, for a payout-settings bank picker. */
+    List<BankInfo> listBanks();
+
+    /**
+     * Requeries a transfer's final status — confirmed against Nomba's own
+     * duplicate-payout prevention guidance (developer.nomba.com/docs/products/transfers/transfer-to-banks):
+     * "Verify Transaction Status — use the Requery endpoint... Do NOT
+     * generate a new reference for the same transaction if it is still
+     * pending." This is GET /v1/transactions/accounts/single?transactionRef=<merchantTxRef>.
+     */
+    TransferResponse verifyTransfer(String merchantTxRef);
 
     /**
      * Queries Nomba directly for a transaction's current status, independent
@@ -94,4 +132,53 @@ public interface NombaPaymentGateway {
             String reference,
             String failureReason
     ) {}
+
+    record BankTransferRequest(
+            String accountNumber,
+            String accountName,
+            String bankCode,
+            long amountKobo,
+            String currency,
+            String idempotencyKey,  // merchantTxRef — one per Disbursement, never reused for a retry (see DisbursementService)
+            String narration
+    ) {}
+
+    /**
+     * status carries Nomba's raw value (SUCCESS, PENDING, PENDING_BILLING,
+     * NEW, REFUND, FAILED, etc.) — success alone collapses too much. Per
+     * Nomba's own duplicate-payout guidance:
+     *   - PENDING/NEW/PENDING_BILLING: NOT failure — do not retry with a
+     *     new reference, requery instead (isPending()).
+     *   - REFUND: a genuinely terminal, safe-to-retry outcome — the
+     *     transfer couldn't be delivered and Nomba auto-reversed it; their
+     *     docs explicitly say a NEW merchantTxRef is safe here, unlike
+     *     PENDING (isRefunded()).
+     */
+    record TransferResponse(
+            boolean success,
+            String reference,
+            String status,
+            String failureReason
+    ) {
+        public boolean isPending() {
+            return !success && (
+                    "PENDING".equalsIgnoreCase(status) ||
+                            "PENDING_BILLING".equalsIgnoreCase(status) ||
+                            "NEW".equalsIgnoreCase(status)
+            );
+        }
+
+        public boolean isRefunded() {
+            return !success && "REFUND".equalsIgnoreCase(status);
+        }
+    }
+
+    record BankLookupResponse(
+            boolean found,
+            String accountNumber,
+            String accountName,  // the REAL name at the bank — always use this, never a merchant-typed value
+            String failureReason
+    ) {}
+
+    record BankInfo(String name, String bankCode) {}
 }

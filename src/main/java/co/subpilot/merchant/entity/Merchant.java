@@ -1,6 +1,7 @@
 package co.subpilot.merchant.entity;
 
 import co.subpilot.common.entity.BaseEntity;
+import co.subpilot.merchant.MerchantStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,4 +40,31 @@ public class Merchant extends BaseEntity {
      */
     @Column(name = "fee_fixed_minor")
     private Long feeFixedMinor;
+
+    /**
+     * Payout destination — an external Nigerian bank account, not a Nomba
+     * sub-account. Nomba has no self-serve API to create a new independent
+     * account for an arbitrary business (their "virtual account" API
+     * creates COLLECTION accounts for a merchant's own customers, not
+     * settlement accounts for the merchant itself; the only way a merchant
+     * gets a real Nomba accountId is signing up with Nomba directly, which
+     * isn't realistic to require of every SubPilot merchant). Using
+     * POST /v2/transfers/bank instead of the wallet-to-wallet transfer
+     * only needs a standard NUBAN + bank code, which any merchant already
+     * has — see DisbursementService / NombaGatewayImpl.initiateBankTransfer.
+     */
+    @Column(name = "payout_bank_account_number")
+    private String payoutBankAccountNumber;
+
+    @Column(name = "payout_bank_code")
+    private String payoutBankCode;
+
+    @Column(name = "payout_account_name")
+    private String payoutAccountName;
+
+
+    /** active | under_review | suspended — see MerchantStatus. Managed only via InternalMerchantService (admin dashboard), never by the merchant themselves. */
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private String status = MerchantStatus.UNDER_REVIEW;
 }
