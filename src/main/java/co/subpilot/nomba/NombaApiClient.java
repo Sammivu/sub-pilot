@@ -73,6 +73,22 @@ public class NombaApiClient {
         }
     }
 
+//    public JsonNode get(String path) {
+//        log.info("GET URL PATH={}", path);
+//        try {
+//            return webClient.get()
+//                    .uri(path)
+//                    .header("Authorization", "Bearer " + tokenManager.getAccessToken())
+//                    .header("accountId", properties.getAccountId())
+//                    .retrieve()
+//                    .bodyToMono(JsonNode.class)
+//                    .timeout(Duration.ofMillis(properties.getConnectTimeoutMs() + properties.getReadTimeoutMs()))
+//                    .block();
+//        } catch (Exception e) {
+//            log.error("Nomba GET {} failed: {}", path, e.getMessage(), e);
+//            throw new NombaApiException("Nomba GET " + path + " failed: " + e.getMessage(), e);
+//        }
+//    }
     public JsonNode get(String path) {
         log.info("GET URL PATH={}", path);
         try {
@@ -84,8 +100,18 @@ public class NombaApiClient {
                     .bodyToMono(JsonNode.class)
                     .timeout(Duration.ofMillis(properties.getConnectTimeoutMs() + properties.getReadTimeoutMs()))
                     .block();
+        } catch (WebClientResponseException.NotFound e) {
+            // 404s are expected for some lookups (e.g. polling a transaction
+            // that hasn't propagated yet). Don't log here — let the caller
+            // decide whether this is an error or just "not found".
+            throw new NombaApiException("Nomba GET " + path + " returned 404 Not Found", e);
+        } catch (WebClientResponseException e) {
+            // Other HTTP errors (400, 401, 500, etc.)
+            throw new NombaApiException(
+                    String.format("Nomba GET %s failed: HTTP %d %s", path, e.getStatusCode().value(), e.getStatusText()), e);
+
         } catch (Exception e) {
-            log.error("Nomba GET {} failed: {}", path, e.getMessage(), e);
+            // Network errors, timeouts, serialization failures, etc.
             throw new NombaApiException("Nomba GET " + path + " failed: " + e.getMessage(), e);
         }
     }
