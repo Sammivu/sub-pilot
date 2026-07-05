@@ -27,8 +27,8 @@ public interface InternalAuditLogRepository extends JpaRepository<InternalAuditL
             "(:targetId IS NULL OR a.targetId = :targetId) AND " +
             "(:actorAdminId IS NULL OR a.actorAdminId = :actorAdminId) AND " +
             "(:actionType IS NULL OR a.actionType = :actionType) AND " +
-            "(:from IS NULL OR a.createdAt >= CAST(:from AS timestamp)) AND " +
-            "(:to IS NULL OR a.createdAt <= CAST(:to AS timestamp)) " +
+            "a.createdAt >= :from AND " +
+            "a.createdAt <= :to " +
             "ORDER BY a.createdAt DESC")
     Page<InternalAuditLog> search(
             @Param("targetId") String targetId,
