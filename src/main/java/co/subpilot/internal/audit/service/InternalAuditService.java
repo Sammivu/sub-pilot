@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +27,7 @@ public class InternalAuditService {
      * accidentally attribute an action to the wrong admin.
      */
     public InternalAuditLog record(String targetType, String targetId, String actionType,
-                                    Object oldValue, Object newValue, String reason) {
+                                   Object oldValue, Object newValue, String reason) {
         InternalAuditLog log = InternalAuditLog.builder()
                 .actorAdminId(InternalAdminContext.requireAdminId())
                 .actorEmail(InternalAdminContext.getEmail())
@@ -40,9 +41,20 @@ public class InternalAuditService {
         return repository.save(log);
     }
 
+    //    public Page<InternalAuditLog> search(String merchantId, String actorAdminId, String actionType,
+//                                          Instant from, Instant to, Pageable pageable) {
+//        return repository.search(merchantId, actorAdminId, actionType, from, to, pageable);
+//    }
     public Page<InternalAuditLog> search(String merchantId, String actorAdminId, String actionType,
-                                          Instant from, Instant to, Pageable pageable) {
-        return repository.search(merchantId, actorAdminId, actionType, from, to, pageable);
+                                         Instant from, Instant to, Pageable pageable) {
+
+        // PostgreSQL cannot infer the type of a null Instant in
+        // "(:from IS NULL OR ...)" JPQL predicates. Instead of relying on
+        // null-aware SQL, normalize missing bounds here and always pass
+        // concrete Instants to the repository.
+        Instant effectiveFrom = from != null ? from : Instant.EPOCH;
+        Instant effectiveTo = to != null ? to : Instant.now().plus(100, ChronoUnit.YEARS);
+        return repository.search(merchantId, actorAdminId, actionType, effectiveFrom, effectiveTo, pageable);
     }
 
     private String toJson(Object value) {
