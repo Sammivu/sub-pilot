@@ -7,10 +7,12 @@ import co.subpilot.auth.repository.ApiKeyRepository;
 import co.subpilot.auth.repository.UserRepository;
 import co.subpilot.auth.security.JwtService;
 import co.subpilot.common.exception.BusinessRuleException;
+import co.subpilot.common.exception.NombaApiException;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.common.tenant.TenantContext;
 import co.subpilot.dunning.service.DunningTriggerService;
 import co.subpilot.internal.admin.service.InternalAdminNotificationService;
+import co.subpilot.merchant.MerchantStatus;
 import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
 import lombok.RequiredArgsConstructor;
@@ -104,10 +106,16 @@ public class AuthService {
             throw new BadCredentialsException("Invalid credentials");
         }
 
-        user.setLastLoginAt(Instant.now());
-
         Merchant merchant = merchantRepository.findById(user.getMerchantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", user.getMerchantId()));
+
+        if (merchant.getStatus() == MerchantStatus.SUSPENDED) {
+            throw new BusinessRuleException(
+                    "merchant_suspended",
+                    "Your account has been suspended. Please contact admin@subpilot.co for assistance."
+            );
+        }
+        user.setLastLoginAt(Instant.now());
 
         String token = jwtService.generateToken(user.getId(), merchant.getId(), user.getEmail());
         String refreshToken = issueRefreshToken(user); // also persists user (lastLoginAt + new refresh hash) in one save
