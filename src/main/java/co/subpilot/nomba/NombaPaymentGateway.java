@@ -180,5 +180,5 @@ public interface NombaPaymentGateway {
             String failureReason
     ) {}
 
-    record BankInfo(String name, String bankCode) {}
+    record BankInfo(String name, String code) {}
 }

@@ -37,7 +37,7 @@ public class MerchantSettingsController {
     @GetMapping("/payout-banks")
     public ResponseEntity<List<BankListEntry>> listBanks() {
         List<BankListEntry> banks = nomba.listBanks().stream()
-                .map(b -> new BankListEntry(b.name(), b.bankCode()))
+                .map(b -> new BankListEntry(b.name(), b.code()))
                 .toList();
         return ResponseEntity.ok(banks);
     }
