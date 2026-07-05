@@ -16,13 +16,36 @@ public interface InternalAuditLogRepository extends JpaRepository<InternalAuditL
      * "filterable by merchant ID, actor admin ID, action type, date range"
      * without four separate near-duplicate query methods.
      */
-    @Query("SELECT a FROM InternalAuditLog a WHERE " +
-            "(:targetId IS NULL OR a.targetId = :targetId) AND " +
-            "(:actorAdminId IS NULL OR a.actorAdminId = :actorAdminId) AND " +
-            "(:actionType IS NULL OR a.actionType = :actionType) AND " +
-            "(:from IS NULL OR a.createdAt >= :from) AND " +
-            "(:to IS NULL OR a.createdAt <= :to) " +
-            "ORDER BY a.createdAt DESC")
+//    @Query("""
+//            SELECT a
+//            FROM InternalAuditLog a
+//            WHERE
+//            (:targetId IS NULL OR a.targetId = :targetId)
+//            AND (:actorAdminId IS NULL OR a.actorAdminId = :actorAdminId)
+//            AND (:actionType IS NULL OR a.actionType = :actionType)
+//            AND (CAST(:from AS timestamp) IS NULL OR a.createdAt >= :from)
+//            AND (CAST(:to AS timestamp) IS NULL OR a.createdAt <= :to)
+//            ORDER BY a.createdAt DESC
+//            """)
+//    Page<InternalAuditLog> search(
+//            @Param("targetId") String targetId,
+//            @Param("actorAdminId") String actorAdminId,
+//            @Param("actionType") String actionType,
+//            @Param("from") Instant from,
+//            @Param("to") Instant to,
+//            Pageable pageable);
+
+    @Query("""
+            SELECT a
+            FROM InternalAuditLog a
+            WHERE
+                (:targetId IS NULL OR a.targetId = :targetId)
+            AND (:actorAdminId IS NULL OR a.actorAdminId = :actorAdminId)
+            AND (:actionType IS NULL OR a.actionType = :actionType)
+            AND a.createdAt >= :from
+            AND a.createdAt <= :to
+            ORDER BY a.createdAt DESC
+            """)
     Page<InternalAuditLog> search(
             @Param("targetId") String targetId,
             @Param("actorAdminId") String actorAdminId,

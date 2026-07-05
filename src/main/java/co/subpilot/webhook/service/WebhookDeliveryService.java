@@ -3,6 +3,7 @@ package co.subpilot.webhook.service;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.event.EventType;
 import co.subpilot.event.entity.Event;
+import co.subpilot.event.repository.EventRepository;
 import co.subpilot.event.service.EventService;
 import co.subpilot.webhook.HmacSigner;
 import co.subpilot.webhook.entity.WebhookDelivery;
@@ -30,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Outbound webhook delivery engine (PRD §12.3).
+ * Outbound webhook delivery engine (PRD Section 12.3).
  *
  * Triggered whenever an Event is created. Finds all registered endpoints
  * subscribed to that event type, signs the payload, and POSTs it.
@@ -39,6 +40,17 @@ import java.util.Map;
  * A merchant webhook failure NEVER blocks the core subscription state change
  * that triggered it (per BACKEND_HANDOFF.md) — this is why delivery is async
  * and fire-and-forget from the caller's perspective.
+ *
+ * IMPORTANT — self-invocation: every @Async/@Transactional method here is
+ * called via `self.` (a @Lazy-injected reference to this bean's own Spring
+ * proxy), never as a bare `this.method(...)` call. Spring's @Async and
+ * @Transactional only take effect when invoked THROUGH the proxy — a plain
+ * internal method call bypasses it silently, with no error or warning.
+ * Before this fix, onEventCreated called dispatch() as a bare `this` call,
+ * which meant @Async was a no-op: delivery (including the blocking HTTP
+ * call in attemptDelivery) ran synchronously on the transaction-commit
+ * thread, directly contradicting this class's own "never blocks" guarantee
+ * above.
  */
 @Slf4j
 @Service
@@ -47,9 +59,18 @@ public class WebhookDeliveryService {
 
     private final WebhookEndpointRepository endpointRepository;
     private final WebhookDeliveryRepository deliveryRepository;
+    private final EventRepository eventRepository;
     private final EventService eventService;
     private final ObjectMapper objectMapper;
     private final WebClient webClient = WebClient.builder().build();
+
+    /**
+     * @Lazy avoids a circular-dependency failure at startup — without it,
+     * constructing this bean would require this bean to already exist.
+     */
+    @Autowired
+    @Lazy
+    private WebhookDeliveryService self;
 
     private static final Duration[] BACKOFF_SCHEDULE = {
             Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(30),
@@ -57,9 +78,6 @@ public class WebhookDeliveryService {
     };
     private static final int MAX_ATTEMPTS = BACKOFF_SCHEDULE.length;
 
-    @Autowired
-    @Lazy
-    private WebhookDeliveryService self;
     /**
      * Listens for EventService.EventCreated, firing only after the
      * surrounding transaction commits successfully (AFTER_COMMIT) — this is
@@ -97,15 +115,12 @@ public class WebhookDeliveryService {
         delivery.setEventId(event.getId());
         delivery.setStatus(WebhookDeliveryStatus.PENDING);
         WebhookDelivery saved = deliveryRepository.save(delivery);
-        log.info(
-                "Webhook delivery created id={} merchant={} endpoint={}",
-                saved.getId(), saved.getMerchantId(), saved.getEndpointId()
-        );
-        log.info("Exists after save = {}", deliveryRepository.existsById(saved.getId()));
+        log.info("Webhook delivery created id={} merchant={} endpoint={}",
+                saved.getId(), saved.getMerchantId(), saved.getEndpointId());
         return saved;
     }
 
-    private void attemptDelivery(WebhookDelivery delivery, WebhookEndpoint endpoint, Event event, String publicEventName) {
+    protected void attemptDelivery(WebhookDelivery delivery, WebhookEndpoint endpoint, Event event, String publicEventName) {
         try {
             String payload = buildPayload(event, publicEventName);
             String signature = HmacSigner.sign(payload, endpoint.getSigningSecretHash());
@@ -120,13 +135,13 @@ public class WebhookDeliveryService {
                     .block(Duration.ofSeconds(10));
 
             int statusCode = response != null ? response.getStatusCode().value() : 0;
-            recordAttemptResult(delivery, statusCode, response != null ? response.getBody() : null,
+            self.recordAttemptResult(delivery, statusCode, response != null ? response.getBody() : null,
                     statusCode >= 200 && statusCode < 300, event.getMerchantId());
 
         } catch (Exception e) {
             log.warn("Webhook delivery failed for endpoint={} event={}: {}",
                     endpoint.getId(), event.getId(), e.getMessage());
-            recordAttemptResult(delivery, null, e.getMessage(), false, event.getMerchantId());
+            self.recordAttemptResult(delivery, null, e.getMessage(), false, event.getMerchantId());
         }
     }
 
@@ -165,15 +180,27 @@ public class WebhookDeliveryService {
     }
 
     /**
-     * Called by the retry scheduler (WebhookRetryJob) for deliveries due for retry.
+     * Called by the retry scheduler (WebhookRetryJob) for deliveries due
+     * for retry. Previously a stub that fetched the delivery/endpoint and
+     * returned without doing anything — WebhookRetryJob calling this
+     * expecting a real retry attempt was a silent no-op. Now re-fetches the
+     * original Event (needed to rebuild the exact same payload
+     * attemptDelivery would have built the first time), resolves the
+     * public event name the same way dispatch() does, and re-attempts
+     * delivery through the proxy so @Transactional on recordAttemptResult
+     * still applies.
      */
-    @Transactional
     public WebhookDelivery retry(String deliveryId) {
         WebhookDelivery delivery = deliveryRepository.findById(deliveryId)
                 .orElseThrow(() -> new ResourceNotFoundException("webhook_delivery", deliveryId));
         WebhookEndpoint endpoint = endpointRepository.findById(delivery.getEndpointId())
                 .orElseThrow(() -> new ResourceNotFoundException("webhook_endpoint", delivery.getEndpointId()));
-        // Re-fetch event payload via EventService would be ideal; simplified here by re-dispatch path
+        Event event = eventRepository.findById(delivery.getEventId())
+                .orElseThrow(() -> new ResourceNotFoundException("event", delivery.getEventId()));
+
+        String publicEventName = WebhookEventCatalogue.toPublicEventName(event.getType());
+        self.attemptDelivery(delivery, endpoint, event, publicEventName);
+
         return delivery;
     }
 }
