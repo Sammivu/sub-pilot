@@ -4,6 +4,9 @@ import co.subpilot.common.exception.BusinessRuleException;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
+import co.subpilot.merchant.MerchantStatus;
+import co.subpilot.merchant.entity.Merchant;
+import co.subpilot.merchant.repository.MerchantRepository;
 import co.subpilot.plan.BillingInterval;
 import co.subpilot.plan.PlanStatus;
 import co.subpilot.plan.ProrationPolicy;
@@ -27,9 +30,27 @@ public class PlanService {
     private final PlanRepository planRepository;
     private final EventService eventService;
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9-]");
+    private final MerchantRepository merchantRepository;
 
     @Transactional
     public Plan create(String merchantId, PlanDtos.CreatePlanRequest req) {
+        Merchant merchant = merchantRepository.findById(merchantId)
+                .orElseThrow(() -> new ResourceNotFoundException("merchant", merchantId));
+
+        if (merchant.getStatus() == MerchantStatus.UNDER_REVIEW) {
+            throw new BusinessRuleException(
+                    "merchant_under_review",
+                    "Your account is still under review. You can create subscription plans once your account has been approved."
+            );
+        }
+        if (merchant.getStatus() == MerchantStatus.SUSPENDED) {
+            throw new BusinessRuleException(
+                    "merchant_suspended",
+                    "Your account has been suspended. Please contact admin@subpilot.co for assistance."
+            );
+        }
+
+
         if (req.billingInterval() == BillingInterval.custom &&
                 (req.intervalValue() == null || req.intervalUnit() == null)) {
             throw new BusinessRuleException("invalid_custom_interval",

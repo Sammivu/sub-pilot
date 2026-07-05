@@ -31,7 +31,7 @@ public class MerchantSettingsController {
     private final NombaPaymentGateway nomba;
 
     public record BankLookupRequest(@NotBlank String accountNumber, @NotBlank String bankCode) {}
-    public record BankLookupResult(boolean found, String accountNumber, String accountName, String failureReason) {}
+    public record BankLookupResult(boolean found, String accountNumber, String accountName, String failureReason, String bankCode) {}
     public record BankListEntry(String name, String bankCode) {}
 
     @GetMapping("/payout-banks")
@@ -46,7 +46,7 @@ public class MerchantSettingsController {
     @PostMapping("/payout-account/lookup")
     public ResponseEntity<BankLookupResult> lookupPayoutAccount(@org.springframework.web.bind.annotation.RequestBody BankLookupRequest req) {
         NombaPaymentGateway.BankLookupResponse result = nomba.lookupBankAccount(req.accountNumber(), req.bankCode());
-        return ResponseEntity.ok(new BankLookupResult(result.found(), result.accountNumber(), result.accountName(), result.failureReason()));
+        return ResponseEntity.ok(new BankLookupResult(result.found(), result.accountNumber(), result.accountName(), result.failureReason(), null));
     }
 
     /**
@@ -72,6 +72,23 @@ public class MerchantSettingsController {
         merchant.setPayoutAccountName(result.accountName()); // Nomba's resolved name — never the client's
         merchantRepository.save(merchant);
 
-        return ResponseEntity.ok(new BankLookupResult(true, result.accountNumber(), result.accountName(), null));
+        return ResponseEntity.ok(new BankLookupResult(true, result.accountNumber(), result.accountName(), null, req.bankCode));
+    }
+
+    @GetMapping("/payout-account")
+    public ResponseEntity<BankLookupResult> getPayoutAccount() {
+        String merchantId = TenantContext.requireMerchantId();
+
+        Merchant merchant = merchantRepository.findById(merchantId)
+                .orElseThrow(() -> new ResourceNotFoundException("merchant", merchantId));
+
+        return ResponseEntity.ok(new BankLookupResult(
+                merchant.getPayoutBankAccountNumber() != null,
+                merchant.getPayoutBankAccountNumber(),
+                merchant.getPayoutAccountName(),
+                null,
+                merchant.getPayoutBankCode()
+
+        ));
     }
 }
