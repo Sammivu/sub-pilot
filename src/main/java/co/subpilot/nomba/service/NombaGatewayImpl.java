@@ -363,7 +363,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
 
             List<BankInfo> banks = new java.util.ArrayList<>();
             for (JsonNode bank : response.path("data")) {
-                banks.add(new BankInfo(bank.path("name").asText(""), bank.path("bankCode").asText("")));
+                banks.add(new BankInfo(bank.path("name").asText(""), bank.path("code").asText("")));
             }
             return banks;
         } catch (NombaApiException e) {
