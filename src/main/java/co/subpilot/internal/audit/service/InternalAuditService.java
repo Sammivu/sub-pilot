@@ -41,21 +41,29 @@ public class InternalAuditService {
         return repository.save(log);
     }
 
-    //    public Page<InternalAuditLog> search(String merchantId, String actorAdminId, String actionType,
-//                                          Instant from, Instant to, Pageable pageable) {
-//        return repository.search(merchantId, actorAdminId, actionType, from, to, pageable);
-//    }
-    public Page<InternalAuditLog> search(String merchantId, String actorAdminId, String actionType,
-                                         Instant from, Instant to, Pageable pageable) {
-
-        // PostgreSQL cannot infer the type of a null Instant in
-        // "(:from IS NULL OR ...)" JPQL predicates. Instead of relying on
-        // null-aware SQL, normalize missing bounds here and always pass
-        // concrete Instants to the repository.
-        Instant effectiveFrom = from != null ? from : Instant.EPOCH;
-        Instant effectiveTo = to != null ? to : Instant.now().plus(100, ChronoUnit.YEARS);
-        return repository.search(merchantId, actorAdminId, actionType, effectiveFrom, effectiveTo, pageable);
+        public Page<InternalAuditLog> search(String merchantId, String actorAdminId, String actionType,
+                                          Instant from, Instant to, Pageable pageable) {
+        return repository.search(merchantId, actorAdminId, actionType, from, to, pageable);
     }
+//    public Page<InternalAuditLog> search(String merchantId, String actorAdminId, String actionType,
+//                                         Instant from, Instant to, Pageable pageable) {
+//
+//        // PostgreSQL cannot infer the type of a null Instant in
+//        // "(:from IS NULL OR ...)" JPQL predicates, so bounds are normalized
+//        // to concrete Instants here rather than passed through as null.
+//        //
+//        // Instant.plus(..., ChronoUnit.YEARS) doesn't work — Instant only
+//        // supports exact-length units (seconds and smaller, plus DAYS); YEARS
+//        // is calendar-estimated and throws UnsupportedTemporalTypeException
+//        // unconditionally, regardless of the value. And Instant.MAX isn't a
+//        // safe substitute either — it's year ~999,999,999, which overflows
+//        // PostgreSQL's timestamp range (max ~year 294276) and would just
+//        // trade this error for a JDBC-level one. A concrete, comfortably
+//        // far-future date avoids both problems.
+//        Instant effectiveFrom = from != null ? from : Instant.EPOCH;
+//        Instant effectiveTo = to != null ? to : Instant.parse("9999-12-31T23:59:59Z");
+//        return repository.search(merchantId, actorAdminId, actionType, effectiveFrom, effectiveTo, pageable);
+//    }
 
     private String toJson(Object value) {
         if (value == null) return null;
