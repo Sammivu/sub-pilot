@@ -92,7 +92,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         order.put("customerEmail", request.customerEmail());
         order.put("amount", toMajorUnitsString(request.amountKobo()));
         order.put("currency", request.currency());
-        order.put("accountId", properties.getAccountId());
+        order.put("accountId", properties.getSubAccountId());
         order.put("allowedPaymentMethods", List.of("Card"));
 
         Map<String, Object> metaData = new LinkedHashMap<>();
@@ -142,7 +142,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         order.put("amount", toMajorUnitsString(request.amountKobo()));
         order.put("currency", request.currency());
         order.put("callbackUrl", ""); // not used for merchant-initiated recurring charges
-        order.put("accountId", properties.getAccountId());
+        order.put("accountId", properties.getSubAccountId());
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("order", order);
