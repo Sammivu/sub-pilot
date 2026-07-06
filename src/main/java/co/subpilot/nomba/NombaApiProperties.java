@@ -18,6 +18,7 @@ public class NombaApiProperties {
 
     private String baseUrl;
     private String accountId;
+    private String subAccountId;
     private String clientId;
     private String clientSecret;
     private boolean mockMode;
@@ -52,4 +53,12 @@ public class NombaApiProperties {
 
     public long getReadTimeoutMs() { return readTimeoutMs; }
     public void setReadTimeoutMs(long readTimeoutMs) { this.readTimeoutMs = readTimeoutMs; }
+
+    public String getSubAccountId() {
+        return subAccountId;
+    }
+
+    public void setSubAccountId(String subAccountId) {
+        this.subAccountId = subAccountId;
+    }
 }
