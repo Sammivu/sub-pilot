@@ -13,6 +13,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class EmailProperties {
 
     private String provider;
+    private String resendApiKey;
+    private String resendBaseUrl;
     private String brevoApiKey;
     private String brevoBaseUrl;
     private String fromEmail;
@@ -44,4 +46,20 @@ public class EmailProperties {
 
     public long getReadTimeoutMs() { return readTimeoutMs; }
     public void setReadTimeoutMs(long readTimeoutMs) { this.readTimeoutMs = readTimeoutMs; }
+
+    public String getResendApiKey() {
+        return resendApiKey;
+    }
+
+    public void setResendApiKey(String resendApiKey) {
+        this.resendApiKey = resendApiKey;
+    }
+
+    public String getResendBaseUrl() {
+        return resendBaseUrl;
+    }
+
+    public void setResendBaseUrl(String resendBaseUrl) {
+        this.resendBaseUrl = resendBaseUrl;
+    }
 }

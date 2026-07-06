@@ -5,11 +5,13 @@ import java.util.Map;
 /**
  * Abstraction over the transactional email provider.
  *
- * BrevoEmailSender is the sole implementation. When no Brevo API key is
- * configured it falls back internally to logging the intended send rather
- * than calling the real API — see BrevoEmailSender for details. This keeps
- * a single bean in play at all times (no @ConditionalOnProperty bean-split,
- * which previously risked two competing beans on a blank-but-present key).
+ * FallbackEmailSender is the bean actually injected (marked @Primary) —
+ * it tries ResendEmailSender first, falling back to BrevoEmailSender on
+ * any failure. Both providers independently fall back to logging the
+ * intended send when their respective API key is unset/blank, so the
+ * whole chain degrades gracefully in dev/CI with zero real credentials
+ * configured. See FallbackEmailSender for the actual priority/fallback
+ * wiring.
  */
 public interface EmailSender {
 
