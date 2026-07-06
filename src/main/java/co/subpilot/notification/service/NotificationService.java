@@ -131,7 +131,7 @@ public class NotificationService {
     public void sendNewSubscriberAlert(Subscription sub) {
         withContext(sub, (customer, plan, merchant) -> {
             Map<String, String> vars = baseVars(customer, plan, merchant);
-            vars.put("dashboardUrl", frontendBaseUrl + "/app/subscriptions/" + sub.getId());
+            vars.put("dashboardUrl", frontendBaseUrl + "/subscriptions/" + sub.getId());
             send(merchant.getId(), sub.getId(), merchant.getEmail(), merchant.getBusinessName(),
                     EmailTemplate.NEW_SUBSCRIBER, vars);
         });
