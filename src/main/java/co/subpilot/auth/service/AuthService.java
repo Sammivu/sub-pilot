@@ -91,7 +91,7 @@ public class AuthService {
         log.info("New merchant signed up: {} ({})", merchant.getBusinessName(), merchant.getId());
 
         return new AuthResult(
-                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName()),
+                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName(), merchant.getStatus()),
                 token, refreshToken
         );
     }
@@ -121,7 +121,7 @@ public class AuthService {
         String refreshToken = issueRefreshToken(user); // also persists user (lastLoginAt + new refresh hash) in one save
 
         return new AuthResult(
-                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName()),
+                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName(), merchant.getStatus()),
                 token, refreshToken
         );
     }
@@ -150,7 +150,7 @@ public class AuthService {
         String newRefreshToken = issueRefreshToken(user); // rotates — old hash is overwritten
 
         return new AuthResult(
-                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName()),
+                new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName(), merchant.getStatus()),
                 token, newRefreshToken
         );
     }
@@ -165,7 +165,7 @@ public class AuthService {
         Merchant merchant = merchantRepository.findById(user.getMerchantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", user.getMerchantId()));
 
-        return new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName());
+        return new AuthDtos.AuthResponse(merchant.getId(), user.getId(), user.getEmail(), merchant.getBusinessName(), merchant.getStatus());
     }
 
     /** Gap 6 — expires the session by clearing the stored refresh token, so it can no longer be exchanged either. */

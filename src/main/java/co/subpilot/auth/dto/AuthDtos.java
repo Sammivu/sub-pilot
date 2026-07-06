@@ -37,7 +37,8 @@ public class AuthDtos {
             String merchantId,
             String userId,
             String email,
-            String businessName
+            String businessName,
+            String status
     ) {}
 
     /** Gap 4 — refresh token exchange. Like AuthResponse, never returns the access token in the body. */

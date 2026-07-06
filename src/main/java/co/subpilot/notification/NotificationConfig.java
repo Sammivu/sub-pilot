@@ -25,8 +25,8 @@ public class NotificationConfig {
     void validate() {
         StringBuilder missing = new StringBuilder();
 
-        if (properties.getProvider() == null || properties.getProvider().isBlank()) {
-            missing.append("\n  - subpilot.email.provider");
+        if (properties.getResendBaseUrl() == null || properties.getResendBaseUrl().isBlank()) {
+            missing.append("\n  - subpilot.email.resend-base-url");
         }
 
         if (properties.getBrevoBaseUrl() == null || properties.getBrevoBaseUrl().isBlank()) {
@@ -50,18 +50,26 @@ public class NotificationConfig {
         }
 
         /*
-         * Only validate provider-specific credentials when email
-         * delivery is enabled.
+         * NOTE: properties.getProvider() is no longer consulted by
+         * FallbackEmailSender's routing at all -- it always tries Resend
+         * first (skipping straight to Brevo if unconfigured), then falls
+         * back to Brevo on any real Resend failure. That field is
+         * effectively informational/vestigial now; validation below
+         * checks the actual send-time behavior, not the provider string,
+         * so this doesn't silently drift out of sync with it again.
+         *
+         * Both keys are required when enabled=true, not just one -- if
+         * both were allowed to be blank, every email would silently
+         * degrade to log-only forever in a real deployment, which is fine
+         * for dev/CI (properties.isEnabled()=false covers that case
+         * explicitly) but shouldn't happen unnoticed in production.
          */
         if (properties.isEnabled()) {
-
-            if ("brevo".equalsIgnoreCase(properties.getProvider())) {
-
-                if (properties.getBrevoApiKey() == null
-                        || properties.getBrevoApiKey().isBlank()) {
-
-                    missing.append("\n  - subpilot.email.brevo-api-key (required when email.enabled=true)");
-                }
+            if (properties.getResendApiKey() == null || properties.getResendApiKey().isBlank()) {
+                missing.append("\n  - subpilot.email.resend-api-key (required when email.enabled=true)");
+            }
+            if (properties.getBrevoApiKey() == null || properties.getBrevoApiKey().isBlank()) {
+                missing.append("\n  - subpilot.email.brevo-api-key (required when email.enabled=true -- kept as automatic fallback)");
             }
         }
 
@@ -73,10 +81,10 @@ public class NotificationConfig {
         }
 
         log.info(
-                "Email configuration loaded. provider={}, enabled={}, from={}, baseUrl={}",
-                properties.getProvider(),
+                "Email configuration loaded. enabled={}, from={}, resendBaseUrl={}, brevoBaseUrl={}",
                 properties.isEnabled(),
                 properties.getFromEmail(),
+                properties.getResendBaseUrl(),
                 properties.getBrevoBaseUrl()
         );
     }
