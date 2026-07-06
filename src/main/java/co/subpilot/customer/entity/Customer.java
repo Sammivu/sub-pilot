@@ -1,6 +1,7 @@
 package co.subpilot.customer.entity;
 
 import co.subpilot.common.entity.BaseEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -24,8 +25,9 @@ public class Customer extends BaseEntity {
     @Column(name = "nomba_customer_id")
     private String nombaCustomerId;
 
+    @JsonIgnore
     @Column(name = "card_token")
-    private String cardToken; // tokenised card reference — never raw card data
+    private String cardToken; // tokenised card reference — never raw card data, never serialized to API responses
 
     @Column(name = "card_last4")
     private String cardLast4;

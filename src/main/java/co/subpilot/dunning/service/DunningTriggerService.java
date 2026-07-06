@@ -1,5 +1,6 @@
 package co.subpilot.dunning.service;
 
+import co.subpilot.customer.repository.CustomerRepository;
 import co.subpilot.dunning.entity.DunningCampaign;
 import co.subpilot.dunning.entity.DunningExecution;
 import co.subpilot.dunning.entity.DunningStep;
@@ -44,6 +45,7 @@ public class DunningTriggerService {
     private final DunningCampaignRepository campaignRepository;
     private final DunningExecutionRepository executionRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
     private final InvoiceService invoiceService;
     private final PaymentAttemptRepository paymentAttemptRepository;
@@ -380,6 +382,15 @@ public class DunningTriggerService {
         sub.setNombaCustomerRef(nombaCustomerId);
         sub.setPendingCardUpdateAt(null); // resolved — TSQ no longer needs to chase this one
         subscriptionRepository.save(sub);
+
+        // Keep the customer's record in sync too — mirrors activateAfterCheckout,
+        // so the customer's most recently used card is reflected account-wide,
+        // not just on this one subscription.
+        customerRepository.findById(sub.getCustomerId()).ifPresent(c -> {
+            c.setCardToken(newCardToken);
+            c.setNombaCustomerId(nombaCustomerId);
+            customerRepository.save(c);
+        });
 
         // Find active dunning execution and attempt charge
         executionRepository.findBySubscriptionIdAndStatus(sub.getId(), "active")
