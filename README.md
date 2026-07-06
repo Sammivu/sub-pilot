@@ -12,7 +12,7 @@ Recurring billing infrastructure for African businesses — built on Nomba payme
 - Redis (distributed locks, rate limiting)
 - Flyway (database migrations)
 - ShedLock (prevents duplicate billing job runs)
-- OpenApi Swagger Docs (http://localhost:8080/api/swagger-ui/index.html and http://localhost:8080/api/v3/api-docs)
+- OpenApi Swagger Docs (https://nomba-subpilot.duckdns.org/api/swagger-ui/index.html and https://nomba-subpilot.duckdns.org/api/v3/api-docs)
 
 ---
 
@@ -26,8 +26,8 @@ Recurring billing infrastructure for African businesses — built on Nomba payme
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/your-org/subpilot-backend.git
-cd subpilot-backend
+git clone https://github.com/Sammivu/sub-pilot.git
+cd sub-pilot
 cp .env.example .env.example
 # Edit .env.example — defaults work for local dev as-is
 ```
@@ -54,8 +54,8 @@ Flyway migrations run automatically on startup.
 ## API Base URL
 
 ```
-Local:  http://localhost:8080/api/v1
-Prod:   https://subpilot-backend.railway.app/api/v1
+Local:  http://localhost:8080
+Prod:   https://nomba-subpilot.duckdns.org
 ```
 
 ---
@@ -125,10 +125,6 @@ co.subpilot/
 
 The React frontend lives at: https://github.com/AgiriTaofeek/sub-pilot
 
-Expected on Netlify at: https://sub-pilot.netlify.app
-
-or
-
-Expected on Netlify at: https://subpilot.netlify.app
+Expected on Netlify at: https://subpilot-web.subpilot-app.workers.dev/
 
 Set `FRONTEND_BASE_URL` to the Netlify URL in Railway environment variables.
