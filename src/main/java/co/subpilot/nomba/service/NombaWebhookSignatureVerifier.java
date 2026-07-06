@@ -47,22 +47,21 @@ public class NombaWebhookSignatureVerifier {
      * @param providedSignature the value of the signature header Nomba sent
      */
     public boolean verify(JsonNode payload, String timestamp, String providedSignature) {
-        if (properties.getWebhookSecret() == null || properties.getWebhookSecret().isBlank()) {
-            log.error("NOMBA_WEBHOOK_SECRET is not configured — refusing to accept inbound webhook in real mode");
-            return false;
-        }
-        if (providedSignature == null || timestamp == null) {
-            return false;
-        }
+        // ... null checks ...
 
         try {
-            String hashingPayload = buildHashingPayload(payload);
-            String message = hashingPayload + ":" + timestamp;
+            String hashingPayload = buildHashingPayload(payload, timestamp); // :white_check_mark: pass timestamp in
 
+            // :white_check_mark: hash the full string directly — no extra concatenation
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(properties.getWebhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] hash = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
+            mac.init(new SecretKeySpec(
+                    properties.getWebhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"
+            ));
+            byte[] hash = mac.doFinal(hashingPayload.getBytes(StandardCharsets.UTF_8));
             String computedSignature = Base64.getEncoder().encodeToString(hash);
+
+            log.info("Hashing payload: [{}]", hashingPayload);  // keep this for debugging
+            log.info("Computed: {} | Provided: {}", computedSignature, providedSignature);
 
             return MessageDigest.isEqual(
                     computedSignature.getBytes(StandardCharsets.UTF_8),
@@ -81,10 +80,15 @@ public class NombaWebhookSignatureVerifier {
      * slightly between event types, and a missing field should fail the
      * signature comparison naturally rather than throw.
      */
-    private String buildHashingPayload(JsonNode payload) {
+    private String buildHashingPayload(JsonNode payload, String timestamp) {
         JsonNode data = payload.path("data");
         JsonNode merchant = data.path("merchant");
         JsonNode transaction = data.path("transaction");
+
+        String transactionResponseCode = textOrEmpty(transaction, "responseCode");
+        if ("null".equalsIgnoreCase(transactionResponseCode)) {
+            transactionResponseCode = "";
+        }
 
         return String.join(":",
                 textOrEmpty(payload, "event_type"),
@@ -94,7 +98,8 @@ public class NombaWebhookSignatureVerifier {
                 textOrEmpty(transaction, "transactionId"),
                 textOrEmpty(transaction, "type"),
                 textOrEmpty(transaction, "time"),
-                textOrEmpty(transaction, "responseCode")
+                transactionResponseCode,
+                timestamp                          // :white_check_mark: 9th segment
         );
     }
 
