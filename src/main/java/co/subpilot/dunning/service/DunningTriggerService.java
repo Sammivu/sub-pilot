@@ -1,5 +1,7 @@
 package co.subpilot.dunning.service;
 
+import co.subpilot.common.exception.ResourceNotFoundException;
+import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.repository.CustomerRepository;
 import co.subpilot.dunning.entity.DunningCampaign;
 import co.subpilot.dunning.entity.DunningExecution;
@@ -219,11 +221,13 @@ public class DunningTriggerService {
         if (existingSucceeded.isPresent()) {
             return true; // already succeeded
         }
+        Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
 
         NombaPaymentGateway.ChargeResponse charge = nomba.chargeToken(
                 new NombaPaymentGateway.ChargeRequest(
                         cardToken, idempotencyKey, invoice.getAmount(),
-                        invoice.getCurrency(), sub.getMerchantId(),
+                        invoice.getCurrency(), customer.getEmail(),
                         sub.getId(), invoice.getId()
                 )
         );
