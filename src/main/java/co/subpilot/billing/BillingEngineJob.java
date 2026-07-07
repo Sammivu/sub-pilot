@@ -1,5 +1,8 @@
 package co.subpilot.billing;
 
+import co.subpilot.common.exception.ResourceNotFoundException;
+import co.subpilot.customer.entity.Customer;
+import co.subpilot.customer.repository.CustomerRepository;
 import co.subpilot.dunning.service.DunningTriggerService;
 import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
@@ -57,6 +60,7 @@ public class BillingEngineJob {
     private final EventService eventService;
     private final NombaPaymentGateway nomba;
     private final SubscriptionService subscriptionService;
+    private final CustomerRepository customerRepository;
     private final DunningTriggerService dunningTriggerService;
     private final NotificationService notificationService;
 
@@ -131,12 +135,14 @@ public class BillingEngineJob {
         newAttempt.setCurrency(plan.getCurrency());
         newAttempt.setStatus("processing");
         PaymentAttempt attempt = paymentAttemptRepository.save(newAttempt);
+        Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
 
         // ── Call Nomba Charge API ──────────────────────────────────────────
         NombaPaymentGateway.ChargeResponse charge = nomba.chargeToken(
                 new NombaPaymentGateway.ChargeRequest(
                         cardToken, idempotencyKey, plan.getAmount(),
-                        plan.getCurrency(), sub.getMerchantId(),
+                        plan.getCurrency(), customer.getEmail(),
                         sub.getId(), invoice.getId()
                 )
         );
