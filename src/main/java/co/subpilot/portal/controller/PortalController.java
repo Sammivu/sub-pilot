@@ -1,5 +1,6 @@
 package co.subpilot.portal.controller;
 
+import co.subpilot.common.exception.BusinessRuleException;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.repository.CustomerRepository;
@@ -17,7 +18,9 @@ import co.subpilot.subscription.entity.Subscription;
 import co.subpilot.subscription.service.SubscriptionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,6 +45,7 @@ import java.util.List;
  * Deliberately exposes only what a subscriber should see — see PortalDtos
  * for the slim, hand-picked projections used instead of raw entities.
  */
+@Slf4j
 @RestController
 @RequestMapping("/v1/portal/{subscriptionToken}")
 @RequiredArgsConstructor
@@ -133,6 +137,22 @@ public class PortalController {
                         "Card update checkout for subscription " + sub.getId()
                 )
         );
+
+        // Previously missing entirely — NombaGatewayImpl.initiateCheckout's
+        // catch block never throws on failure, it returns
+        // CheckoutResponse(null, orderReference, false). Without this
+        // check, that null checkoutUrl was returned inside a 200 OK, and
+        // the frontend's window.location.assign(result.checkoutUrl)
+        // coerced null to the literal string "null", navigating the
+        // browser to a broken /portal/{token}/null path — which is what
+        // actually produced the "link no longer valid" symptom, not any
+        // problem with the subscription token itself.
+        if (!checkout.success() || checkout.checkoutUrl() == null) {
+            log.error("Failed to initiate card-update checkout for subscription={}: Nomba checkout creation failed", sub.getId());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(new PortalDtos.PortalUpdateCardResponse(null, null));
+        }
+
 
         subscriptionService.markCardUpdateInitiated(sub.getId());
 

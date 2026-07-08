@@ -114,6 +114,14 @@ public class DunningTriggerService {
 
     @Transactional
     public void processExecution(DunningExecution execution) {
+
+        DunningExecution execute = executionRepository.findByIdForUpdate(execution.getId())
+                .orElseThrow(() -> new RuntimeException("Dunning execution not found: " + execution.getId()));
+
+        // Another thread may already have resolved it while we were waiting
+        if (!"active".equals(execute.getStatus())) {
+            return;
+        }
         DunningCampaign campaign = campaignRepository.findById(execution.getCampaignId())
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + execution.getCampaignId()));
 
@@ -191,7 +199,7 @@ public class DunningTriggerService {
 
         // ── Retry charge ───────────────────────────────────────────────────
         if ("retry_charge".equals(step.getAction()) || "both".equals(step.getAction())) {
-            chargeSucceeded = attemptCharge(sub, invoice, step.getStepNumber());
+            chargeSucceeded = attemptCharge(sub, invoice);
         }
 
         // ── Send email ─────────────────────────────────────────────────────
@@ -210,11 +218,11 @@ public class DunningTriggerService {
         }
     }
 
-    private boolean attemptCharge(Subscription sub, Invoice invoice, int stepNumber) {
+    private boolean attemptCharge(Subscription sub, Invoice invoice) {
         String cardToken = sub.getNombaCardTokenRef();
         if (cardToken == null) return false;
 
-        String idempotencyKey = sub.getId() + ":dunning:" + stepNumber + ":" + invoice.getId();
+        String idempotencyKey = "invoice:" + invoice.getId();
         // Check idempotency
         var existingSucceeded = paymentAttemptRepository.findByIdempotencyKey(idempotencyKey)
                 .filter(a -> "succeeded".equals(a.getStatus()));
@@ -399,12 +407,26 @@ public class DunningTriggerService {
         // Find active dunning execution and attempt charge
         executionRepository.findBySubscriptionIdAndStatus(sub.getId(), "active")
                 .ifPresent(execution -> {
-                    invoiceRepository.findById(execution.getInvoiceId()).ifPresent(invoice -> {
-                        boolean charged = attemptCharge(sub, invoice, 99); // step 99 = self-cure
-                        if (charged) {
-                            resolveDunning(execution, sub, invoice);
-                        }
-                    });
-                });
+                    DunningExecution lockedExecution =
+                            executionRepository.findByIdForUpdate(execution.getId())
+                                    .orElseThrow(() -> new RuntimeException("Dunning execution disappeared: " + execution.getId()));
+                    // Scheduler may already have completed while we waited
+                    if (!"active".equals(lockedExecution.getStatus())) {
+                        return;
+                    }
+                    invoiceRepository.findById(lockedExecution.getInvoiceId())
+                            .ifPresent(invoice -> {
+                                if (invoice.isPaid()) {
+                                    return;
+                                }
+                                boolean charged = attemptCharge(sub, invoice);
+                                if (charged) {
+                                    resolveDunning(lockedExecution, sub, invoice);
+                                }
+                            }
+                    );
+
+                }
+        );
     }
 }

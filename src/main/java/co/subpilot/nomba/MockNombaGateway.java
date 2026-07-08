@@ -114,6 +114,19 @@ public class MockNombaGateway implements NombaPaymentGateway {
     }
 
     @Override
+    public DeleteTokenResponse deleteTokenizedCard(String tokenKey) {
+        log.info("[MOCK NOMBA] Deleted  — ref={} (always reports SUCCESS in mock mode)", tokenKey);
+        return new DeleteTokenResponse(true, null);
+    }
+
+    @Override
+    public TokenizedCardsPage listTokenizedCards(String page) {
+        log.info("[MOCK NOMBA] Listing tokenized cards — page={} (returns empty list in mock mode)", page);
+        return new TokenizedCardsPage(java.util.List.of(), null);
+    }
+
+
+    @Override
     public VerificationResponse verifyTransaction(String orderReference) {
         log.info("[MOCK NOMBA] Transaction verification — ref={} (always reports SUCCESS in mock mode)", orderReference);
         String transactionId = "mock_verify_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);

@@ -75,6 +75,42 @@ public interface NombaPaymentGateway {
     TransferResponse verifyTransfer(String merchantTxRef);
 
     /**
+     * Deletes a saved tokenized card from Nomba's side — called on
+     * subscription cancellation so a cancelled subscription doesn't leave
+     * a live, chargeable card credential sitting on Nomba's account
+     * indefinitely.
+     *
+     * UNVERIFIED against Nomba's own docs — same caveat as
+     * initiateRefund elsewhere in this file. Nomba's API reference
+     * confirms this endpoint exists ("DEL Delete tokenized card data",
+     * listed in their nav alongside List/Update tokenized card data), but
+     * search could not surface its own page's exact request shape (path
+     * params vs query vs body). Implemented here against the most
+     * consistent pattern from every other endpoint in this same
+     * online-checkout family — DELETE /v1/checkout/tokenized-card-data
+     * with accountId header and tokenKey as a query param, mirroring how
+     * List tokenized cards (GET, same base path) and Charge tokenized
+     * cards (POST, tokenKey in body) both identify a card. Confirm
+     * against Nomba's actual docs page before depending on this in a real
+     * cancellation flow at scale.
+     */
+    DeleteTokenResponse deleteTokenizedCard(String tokenKey);
+
+    /**
+     * Lists tokenized cards on the account — confirmed against Nomba's
+     * docs (GET /v1/checkout/tokenized-card-data, paginated via
+     * data.nextPage). Not filterable by customer server-side; callers
+     * filter the returned list by customerEmail themselves.
+     */
+    TokenizedCardsPage listTokenizedCards(String page);
+
+    record DeleteTokenResponse(boolean success, String failureReason) {}
+
+    record TokenizedCard(String tokenKey, String customerEmail, String cardType, String cardPan, String tokenExpirationDate) {}
+
+    record TokenizedCardsPage(List<TokenizedCard> cards, String nextPage) {}
+
+    /**
      * Queries Nomba directly for a transaction's current status, independent
      * of whether a webhook for it was received. Use this as a reconciliation
      * safety net — e.g. from a checkout return/callback handler, or to

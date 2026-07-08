@@ -105,6 +105,12 @@ public class SubscriptionService {
                 )
         );
 
+        if (!checkout.success()) {
+            throw new BusinessRuleException("checkout_failed",
+                    "Unable to create checkout session. Please try again."
+            );
+        }
+
         eventService.emit(merchantId, EventType.SUBSCRIPTION_CREATED, "subscription",
                 subscription.getId(), Map.of("planId", planId, "customerId", customer.getId()));
 
