@@ -78,8 +78,8 @@ public class PlatformFeeService {
      * original platform fee so the merchant isn't left out of pocket for
      * SubPilot's cut on money that was given back to the customer.
      */
-    public long calculateFeeReversal(String invoiceId, long refundAmount) {
-        return platformFeeRepository.findByInvoiceId(invoiceId)
+    public long calculateFeeReversal(String invoiceId, long refundAmount, String merchantId) {
+        return platformFeeRepository.findByMerchantIdAndInvoiceId(merchantId, invoiceId)
                 .map(fee -> feePolicy.proportionalFeeRefund(fee.getFeeAmount(), fee.getGrossAmount(), refundAmount))
                 .orElse(0L);
     }
