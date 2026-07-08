@@ -13,10 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Real implementation of NombaPaymentGateway, backed by Nomba's documented
@@ -264,6 +261,43 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
      * call in this class, which are all /v1). Request shape and response
      * both confirmed directly from Nomba's own curl example, not inferred.
      */
+//    @Override
+//    public TransferResponse initiateBankTransfer(BankTransferRequest request) {
+//        Map<String, Object> body = new LinkedHashMap<>();
+//        body.put("amount", toMajorUnitsNumber(request.amountKobo()));
+//        body.put("accountNumber", request.accountNumber());
+//        body.put("accountName", request.accountName());
+//        body.put("bankCode", request.bankCode());
+//        body.put("merchantTxRef", request.idempotencyKey());
+//        body.put("senderName", "SubPilot");
+//        body.put("narration", request.narration() != null ? request.narration() : "SubPilot payout");
+//
+//        try {
+//            JsonNode response = apiClient.post("/v2/transfers/bank", body);
+//            log.info("Transfer response:\n{}", response.toPrettyString());
+//
+//            if (!apiClient.isSuccessEnvelope(response)) {
+//                String description = response != null ? response.path("description").asText("transfer_rejected") : "transfer_rejected";
+//                return new TransferResponse(false, null, "FAILED", description);
+//            }
+//
+//            String status = response.path("data").path("status").asText("");
+//            String reference = response.path("data").path("id").asText(request.idempotencyKey());
+//
+//            if ("SUCCESS".equalsIgnoreCase(status)) {
+//                return new TransferResponse(true, reference, status, null);
+//            }
+//            // PENDING/NEW/PENDING_BILLING/REFUND all fall through here —
+//            // DisbursementService branches on TransferResponse.isPending()
+//            // vs isRefunded() vs plain failure to decide what to do next.
+//            return new TransferResponse(false, reference, status,
+//                    "Transfer not confirmed successful (status=" + status + ")");
+//
+//        } catch (NombaApiException e) {
+//            log.error("Bank transfer failed for merchantTxRef={}: {}", request.idempotencyKey(), e.getMessage());
+//            return new TransferResponse(false, null, "FAILED", "Could not reach Nomba: " + e.getMessage());
+//        }
+//    }
     @Override
     public TransferResponse initiateBankTransfer(BankTransferRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -278,26 +312,32 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         try {
             JsonNode response = apiClient.post("/v2/transfers/bank", body);
 
-            if (!apiClient.isSuccessEnvelope(response)) {
-                String description = response != null ? response.path("description").asText("transfer_rejected") : "transfer_rejected";
-                return new TransferResponse(false, null, "FAILED", description);
-            }
+            log.info("Nomba bank transfer response:\n{}", response.toPrettyString());
+            JsonNode data = response.path("data");
+            String status = data.path("status").asText("");
+            String reference = data.path("id").asText(request.idempotencyKey());
+            String description = response.path("description").asText(null);
 
-            String status = response.path("data").path("status").asText("");
-            String reference = response.path("data").path("id").asText(request.idempotencyKey());
-
-            if ("SUCCESS".equalsIgnoreCase(status)) {
-                return new TransferResponse(true, reference, status, null);
-            }
-            // PENDING/NEW/PENDING_BILLING/REFUND all fall through here —
-            // DisbursementService branches on TransferResponse.isPending()
-            // vs isRefunded() vs plain failure to decide what to do next.
-            return new TransferResponse(false, reference, status,
-                    "Transfer not confirmed successful (status=" + status + ")");
-
+            return switch (status.toUpperCase(Locale.ROOT)) {
+                case "SUCCESS" -> new TransferResponse(true, reference, status, null);
+                case "PENDING", "PENDING_BILLING", "NEW" -> new TransferResponse(false, reference, status, null);
+                case "REFUND" -> new TransferResponse(false, reference, status, description != null ? description
+                                : "Transfer was refunded by Nomba"
+                );
+                default -> new TransferResponse(false, reference, status, description != null ? description
+                                : "Transfer failed"
+                );
+            };
         } catch (NombaApiException e) {
-            log.error("Bank transfer failed for merchantTxRef={}: {}", request.idempotencyKey(), e.getMessage());
-            return new TransferResponse(false, null, "FAILED", "Could not reach Nomba: " + e.getMessage());
+            log.error("Bank transfer failed for merchantTxRef={}: {}",
+                    request.idempotencyKey(), e.getMessage());
+
+            return new TransferResponse(
+                    false,
+                    null,
+                    "FAILED",
+                    "Could not reach Nomba: " + e.getMessage()
+            );
         }
     }
 
@@ -327,6 +367,61 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         } catch (NombaApiException e) {
             log.error("Failed to verify transfer merchantTxRef={}: {}", merchantTxRef, e.getMessage());
             return new TransferResponse(false, merchantTxRef, "VERIFICATION_FAILED", e.getMessage());
+        }
+    }
+
+    /**
+     * UNVERIFIED against Nomba's own docs page for this specific endpoint
+     * — see the interface javadoc on deleteTokenizedCard for the full
+     * caveat. Built against the most consistent pattern from every other
+     * endpoint in this family.
+     */
+    @Override
+    public DeleteTokenResponse deleteTokenizedCard(String tokenKey) {
+        Map<String, Object> body = Map.of("tokenKey", tokenKey);
+        try {
+            JsonNode response = apiClient.delete("/v1/checkout/tokenized-card-data", body);
+
+            if (!apiClient.isSuccessEnvelope(response)) {
+                String description = response != null ? response.path("description").asText("delete_rejected") : "delete_rejected";
+                return new DeleteTokenResponse(false, description);
+            }
+            return new DeleteTokenResponse(true, null);
+
+        } catch (NombaApiException e) {
+            log.error("Failed to delete tokenized card tokenKey={}: {}", tokenKey, e.getMessage());
+            return new DeleteTokenResponse(false, e.getMessage());
+        }
+    }
+
+    /** Confirmed against Nomba's docs — GET /v1/checkout/tokenized-card-data, paginated via data.nextPage. */
+    @Override
+    public TokenizedCardsPage listTokenizedCards(String page) {
+        String path = "/v1/checkout/tokenized-card-data" + (page != null ? "?page=" + page : "");
+        try {
+            JsonNode response = apiClient.get(path);
+
+            if (!apiClient.isSuccessEnvelope(response)) {
+                return new TokenizedCardsPage(java.util.List.of(), null);
+            }
+
+            JsonNode data = response.path("data");
+            String nextPage = data.path("nextPage").asText(null);
+            java.util.List<TokenizedCard> cards = new java.util.ArrayList<>();
+            for (JsonNode c : data.path("tokenizedCardDataList")) {
+                cards.add(new TokenizedCard(
+                        c.path("tokenKey").asText(null),
+                        c.path("customerEmail").asText(null),
+                        c.path("cardType").asText(null),
+                        c.path("cardPan").asText(null),
+                        c.path("tokenExpirationDate").asText(null)
+                ));
+            }
+            return new TokenizedCardsPage(cards, nextPage);
+
+        } catch (NombaApiException e) {
+            log.error("Failed to list tokenized cards: {}", e.getMessage());
+            return new TokenizedCardsPage(java.util.List.of(), null);
         }
     }
 

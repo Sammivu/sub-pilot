@@ -4,12 +4,14 @@ import co.subpilot.common.exception.NombaApiException;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import javax.naming.Context;
 import java.time.Duration;
 import java.util.Map;
 
@@ -113,6 +115,42 @@ public class NombaApiClient {
         } catch (Exception e) {
             // Network errors, timeouts, serialization failures, etc.
             throw new NombaApiException("Nomba GET " + path + " failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Standalone rather than routed through execute() — execute() accepts
+     * a `method` parameter but always calls .post() regardless of its
+     * value (dead parameter, harmless today since it's only ever invoked
+     * with "POST", but not something to build a real DELETE on top of).
+     */
+    public JsonNode delete(String path, Map<String, Object> body) {
+        log.info("DELETE URL PATH={}", path);
+
+        try {
+            return webClient.method(HttpMethod.DELETE)
+                    .uri(path)
+                    .header("Authorization", "Bearer " + tokenManager.getAccessToken())
+                    .header("accountId", properties.getAccountId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .timeout(Duration.ofMillis(properties.getConnectTimeoutMs() + properties.getReadTimeoutMs()))
+                    .block();
+        } catch (WebClientResponseException.NotFound e) {
+            // 404s are expected for some lookups (e.g. polling a transaction
+            // that hasn't propagated yet). Don't log here — let the caller
+            // decide whether this is an error or just "not found".
+            throw new NombaApiException("Nomba DELETE " + path + " returned 404 Not Found", e);
+        } catch (WebClientResponseException e) {
+            // Other HTTP errors (400, 401, 500, etc.)
+            throw new NombaApiException(
+                    String.format("Nomba DELETE %s failed: HTTP %d %s", path, e.getStatusCode().value(), e.getStatusText()), e);
+
+        } catch (Exception e) {
+            log.error("Nomba DELETE {} failed: {}", path, e.getMessage(), e);
+            throw new NombaApiException("Nomba DELETE " + path + " failed: " + e.getMessage(), e);
         }
     }
 

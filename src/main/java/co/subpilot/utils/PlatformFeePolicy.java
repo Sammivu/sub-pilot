@@ -36,13 +36,13 @@ public class PlatformFeePolicy {
 
     private final PlatformFeeDefaultRepository platformFeeDefaultRepository;
 
-    @Value("${subpilot.fees.default-bps:150}")
+    @Value("${subpilot.fees.default-bps}")
     private int bootstrapBps;
 
-    @Value("${subpilot.fees.default-fixed-minor:10000}")
+    @Value("${subpilot.fees.default-fixed-minor}")
     private long bootstrapFixedMinor;
 
-    @Value("${subpilot.fees.min-fee-minor:0}")
+    @Value("${subpilot.fees.min-fee-minor}")
     private long minFeeMinor;
 
     @Value("${subpilot.fees.max-fee-minor}")

@@ -1,7 +1,9 @@
 package co.subpilot.dunning.repository;
 
 import co.subpilot.dunning.entity.DunningExecution;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,4 +34,12 @@ public interface DunningExecutionRepository extends JpaRepository<DunningExecuti
 
     @Query("SELECT COUNT(e) FROM DunningExecution e WHERE e.merchantId = :merchantId AND e.startedAt >= :since")
     long countStartedByMerchantSince(@Param("merchantId") String merchantId, @Param("since") Instant since);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+    select e
+    from DunningExecution e
+    where e.id = :id
+    """)
+    Optional<DunningExecution> findByIdForUpdate(@Param("id") String id);
 }

@@ -7,9 +7,11 @@ import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
 import co.subpilot.internal.admin.service.InternalAdminNotificationService;
 import co.subpilot.fee.service.PlatformFeeService;
+import co.subpilot.internal.audit.service.InternalAuditService;
 import co.subpilot.invoice.InvoiceStatus;
 import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.repository.InvoiceRepository;
+import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.nomba.NombaPaymentGateway;
 import co.subpilot.refund.RefundStatus;
 import co.subpilot.refund.entity.Refund;
@@ -52,6 +54,7 @@ public class RefundService {
     private final PlatformFeeService platformFeeService;
     private final NombaPaymentGateway nomba;
     private final EventService eventService;
+    private final InternalAuditService internalAuditService;
     private final InternalAdminNotificationService notificationService;
 
     @Transactional
@@ -142,7 +145,9 @@ public class RefundService {
                 .orElseThrow(() -> new ResourceNotFoundException("invoice", refund.getInvoiceId()));
 
         refund.setStatus(RefundStatus.PENDING);
-        refundRepository.save(refund);
+        Refund refund1 = refundRepository.save(refund);
+
+        String oldStatus = refund1.getStatus();
 
         // Deliberately synchronous — same reasoning as before: whoever's
         // watching the approval queue wants to know immediately whether it
@@ -169,7 +174,14 @@ public class RefundService {
 
             eventService.record(refund.getMerchantId(), EventType.REFUND_SUCCEEDED, "refund", refund.getId(),
                     Map.of("invoiceId", invoice.getId(), "amount", refund.getAmount(), "nombaReference", response.reference()));
-
+            internalAuditService.record(
+                    "refund",
+                    refund.getId(),
+                    "refund_approved",
+                    Map.of("status", oldStatus),
+                    Map.of("status", refund.getStatus()),
+                    null
+            );
             log.info("Refund approved and succeeded: refund={} amount={}", refund.getId(), refund.getAmount());
         } else {
             refund.setStatus(RefundStatus.FAILED);

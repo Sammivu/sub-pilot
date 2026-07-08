@@ -50,7 +50,7 @@ public class DisbursementService {
     public Disbursement trigger(String triggeredByUserId) {
         String merchantId = TenantContext.requireMerchantId();
 
-        Merchant merchant = merchantRepository.findById(merchantId)
+        Merchant merchant = merchantRepository.findByIdForUpdate(merchantId)
                 .orElseThrow(() -> new ResourceNotFoundException("merchant", merchantId));
 
         if (merchant.getPayoutBankAccountNumber() == null || merchant.getPayoutBankAccountNumber().isBlank() ||

@@ -223,12 +223,12 @@ public class InvoiceService {
         return invoice;
     }
 
-    public Page<Invoice> list(String status, String q, int page, int perPage) {
+    public Page<Invoice> list(String status, String q, String subscriptionId, int page, int perPage) {
         String merchantId = TenantContext.requireMerchantId();
         Pageable pageable = PageRequest.of(page, Math.min(perPage, 100), Sort.by("createdAt").descending());
         String normalizedStatus = (status != null && !status.isBlank()) ? status : null;
         String normalizedQ = (q != null && !q.isBlank()) ? q : null;
-        return invoiceRepository.search(merchantId, normalizedStatus, normalizedQ, pageable);
+        return invoiceRepository.search(merchantId, normalizedStatus, subscriptionId, normalizedQ, pageable);
     }
 
     public Invoice getOwned(String merchantId, String invoiceId) {
