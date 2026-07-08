@@ -95,6 +95,18 @@ public class BillingEngineJob {
         Plan plan = planRepository.findById(sub.getPlanId())
                 .orElseThrow(() -> new RuntimeException("Plan not found: " + sub.getPlanId()));
 
+        // Checked BEFORE any charge attempt — previously this was only
+        // checked in advanceBillingDate, AFTER a successful charge, which
+        // meant a customer who requested "cancel at period end" (the only
+        // option cancelViaPortal offers) was charged for one more full
+        // cycle before the cancellation ever took effect. "Cancel at
+        // period end" means stop billing, keep access until the period
+        // already paid for ends — not "charge once more, then stop."
+        if (Boolean.TRUE.equals(sub.isCancelAtPeriodEnd())) {
+            finalizeScheduledCancellation(sub);
+            return;
+        }
+
         Instant periodStart = sub.getNextBillingDate();
         Instant periodEnd = BillingPeriodCalculator.addInterval(periodStart, plan);
 
@@ -210,16 +222,54 @@ public class BillingEngineJob {
         sub.setCurrentPeriodStart(sub.getNextBillingDate());
         sub.setCurrentPeriodEnd(periodEnd);
         sub.setNextBillingDate(periodEnd);
-
-        // Handle cancel_at_period_end
-        if (Boolean.TRUE.equals(sub.isCancelAtPeriodEnd())) {
-            SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.cancelled);
-            sub.setStatus(SubscriptionStatus.cancelled);
-            sub.setCancelledAt(Instant.now());
-            eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_CANCELLED, "subscription",
-                    sub.getId(), Map.of("reason", "cancel_at_period_end"));
-        }
-
         subscriptionRepository.save(sub);
+    }
+
+    /**
+     * The actual point a "cancel at period end" request finalizes — no
+     * charge attempted, subscription transitions straight to cancelled.
+     * This is also where the Nomba-side tokenized card is deleted for this
+     * cancellation path, mirroring SubscriptionService.cancelResolved's
+     * immediate-cancellation path — a subscription shouldn't leave a live,
+     * chargeable card token behind on Nomba's side once cancelled, however
+     * the cancellation was scheduled.
+     */
+    private void finalizeScheduledCancellation(Subscription sub) {
+        SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.cancelled);
+        sub.setStatus(SubscriptionStatus.cancelled);
+        sub.setCancelledAt(Instant.now());
+        subscriptionRepository.save(sub);
+
+        eventService.emit(sub.getMerchantId(), EventType.SUBSCRIPTION_CANCELLED, "subscription",
+                sub.getId(), Map.of("reason", "cancel_at_period_end"));
+
+        deleteNombaCardTokenIfPresent(sub);
+
+        log.info("Subscription cancellation finalized at period end: subscription={}", sub.getId());
+    }
+
+    /**
+     * Best-effort — a failure here is logged, not thrown, since it must
+     * never block the cancellation itself from completing. See
+     * NombaPaymentGateway.deleteTokenizedCard's javadoc for the caveat on
+     * this endpoint's exact request shape being unverified against Nomba's
+     * docs (their page for it didn't surface through search — same
+     * pattern as initiateRefund's existing "unverified" flag elsewhere in
+     * this codebase).
+     */
+    private void deleteNombaCardTokenIfPresent(Subscription sub) {
+        String tokenRef = sub.getNombaCardTokenRef();
+        if (tokenRef == null || tokenRef.isBlank()) return;
+
+        try {
+            var result = nomba.deleteTokenizedCard(tokenRef);
+            if (!result.success()) {
+                log.warn("Failed to delete Nomba tokenized card for subscription={} token={}: {}",
+                        sub.getId(), tokenRef, result.failureReason());
+            }
+        } catch (Exception e) {
+            log.error("Error deleting Nomba tokenized card for subscription={} token={}: {}",
+                    sub.getId(), tokenRef, e.getMessage(), e);
+        }
     }
 }

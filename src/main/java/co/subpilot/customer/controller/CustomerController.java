@@ -1,6 +1,7 @@
 package co.subpilot.customer.controller;
 
 import co.subpilot.common.tenant.TenantContext;
+import co.subpilot.customer.dto.CustomerDtos;
 import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.service.CustomerService;
 import co.subpilot.utils.PaginationUtils;
@@ -41,8 +42,14 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Customer> get(@PathVariable String id) {
+    public ResponseEntity<CustomerDtos.CustomerDetailResponse> get(@PathVariable String id) {
         String merchantId = TenantContext.requireMerchantId();
-        return ResponseEntity.ok(customerService.getOwned(merchantId, id));
+        Customer customer = customerService.getOwned(merchantId, id);
+
+        var savedCards = customerService.fetchSavedCards(customer.getEmail()).stream()
+                .map(CustomerDtos.SavedCard::from)
+                .toList();
+
+        return ResponseEntity.ok(CustomerDtos.CustomerDetailResponse.from(customer, savedCards));
     }
 }

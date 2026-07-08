@@ -473,7 +473,7 @@ public class WebhookController {
             @RequestHeader(value = "nomba-sig-value", required = false) String signatureValueFallback,
             @RequestHeader(value = "nomba-timestamp", required = false) String timestamp) {
 
-        log.info("Nomba Raw WEBHOOK payload===={}", rawPayload);
+        log.info("Nomba Raw WEBHOOK payload incoming sig{}====", signature);
         // 1. Verify signature.
         //    Real mode: Nomba's HMAC scheme is computed over specific JSON
         //    fields + a timestamp header (see NombaWebhookSignatureVerifier),

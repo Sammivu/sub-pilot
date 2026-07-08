@@ -1,9 +1,11 @@
 package co.subpilot.merchant.repository;
 
 import co.subpilot.merchant.entity.Merchant;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -11,6 +13,9 @@ import java.util.Optional;
 
 public interface MerchantRepository extends JpaRepository<Merchant, String> {
     Optional<Merchant> findByEmail(String email);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from Merchant m where m.id = :id")
+    Optional<Merchant> findByIdForUpdate(@Param("id") String id);
     Optional<Merchant> findBySlug(String slug);
     boolean existsByEmail(String email);
     boolean existsBySlug(String slug);
