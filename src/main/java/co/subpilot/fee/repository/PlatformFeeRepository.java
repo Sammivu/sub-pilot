@@ -15,6 +15,7 @@ public interface PlatformFeeRepository extends JpaRepository<PlatformFee, String
     Page<PlatformFee> findByMerchantIdOrderByCreatedAtDesc(String merchantId, Pageable pageable);
 
     Optional<PlatformFee> findByInvoiceId(String invoiceId);
+    Optional<PlatformFee> findByMerchantIdAndInvoiceId(String merchantId, String invoiceId);
 
     @Query("SELECT COALESCE(SUM(p.feeAmount), 0) FROM PlatformFee p WHERE p.merchantId = :merchantId " +
             "AND p.createdAt >= :since")
