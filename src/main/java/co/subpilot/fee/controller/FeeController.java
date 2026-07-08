@@ -94,7 +94,7 @@ public class FeeController {
     @GetMapping("/invoices/{invoiceId}")
     public ResponseEntity<FeeDtos.InvoiceFeeBreakdownResponse> getInvoiceBreakdown(@PathVariable String invoiceId) {
         String merchantId = TenantContext.requireMerchantId();
-        PlatformFee fee = platformFeeRepository.findByInvoiceId(invoiceId)
+        PlatformFee fee = platformFeeRepository.findByMerchantIdAndInvoiceId(merchantId,invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("platform_fee_for_invoice", invoiceId));
 
         return ResponseEntity.ok(new FeeDtos.InvoiceFeeBreakdownResponse(

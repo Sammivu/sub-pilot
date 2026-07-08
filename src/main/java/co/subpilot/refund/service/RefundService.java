@@ -94,7 +94,7 @@ public class RefundService {
                     "Refund amount must be between 1 and " + refundableRemaining + " (already refunded or pending: " + alreadyRefunded + ").");
         }
 
-        long feeReversal = platformFeeService.calculateFeeReversal(invoiceId, amount);
+        long feeReversal = platformFeeService.calculateFeeReversal(invoiceId, amount, merchantId);
 
         // Independent of the entity's own primary key — see idempotencyKey's
         // javadoc on Refund.java. Generated now even though Nomba isn't

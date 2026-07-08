@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -44,27 +46,29 @@ public class CustomerService {
      * customer's own cardToken/cardLast4/cardBrand columns remain that).
      */
     public List<NombaPaymentGateway.TokenizedCard> fetchSavedCards(String customerEmail) {
-        List<NombaPaymentGateway.TokenizedCard> matches = new ArrayList<>();
+        Map<String, NombaPaymentGateway.TokenizedCard> uniqueCards = new LinkedHashMap<>();
         String page = null;
         int pagesScanned = 0;
 
         try {
             do {
                 var result = nomba.listTokenizedCards(page);
+
                 for (var card : result.cards()) {
                     if (customerEmail.equalsIgnoreCase(card.customerEmail())) {
-                        matches.add(card);
+                        uniqueCards.putIfAbsent(card.tokenKey(), card);
                     }
                 }
+
                 page = result.nextPage();
                 pagesScanned++;
             } while (page != null && pagesScanned < MAX_PAGES_SCANNED);
+
         } catch (Exception e) {
             log.warn("Failed to fetch saved cards from Nomba for customerEmail={}: {}", customerEmail, e.getMessage());
             return List.of();
         }
-
-        return matches;
+        return new ArrayList<>(uniqueCards.values());
     }
 
 
