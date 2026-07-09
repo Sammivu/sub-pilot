@@ -91,6 +91,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         order.put("currency", request.currency());
         order.put("accountId", properties.getSubAccountId());
         order.put("allowedPaymentMethods", List.of("Card"));
+        order.put("tokenizeCard", true);
 
         Map<String, Object> metaData = new LinkedHashMap<>();
         metaData.put("merchantReference", request.merchantReference());
@@ -106,7 +107,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("order", order);
-        body.put("tokenizeCard", true); // required so future renewals can charge without re-entering card details
+//        body.put("tokenizeCard", true); // required so future renewals can charge without re-entering card details
 
         try {
             JsonNode response = apiClient.post(checkoutBasePath() + "/order", body);
@@ -133,6 +134,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
 
     @Override
     public ChargeResponse chargeToken(ChargeRequest request) {
+
         Map<String, Object> order = new LinkedHashMap<>();
         order.put("orderReference", request.idempotencyKey()); // deterministic — Nomba's own dedup boundary benefits too
         order.put("customerEmail", request.customerEmail());
@@ -140,6 +142,9 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         order.put("currency", request.currency());
         order.put("callbackUrl", ""); // not used for merchant-initiated recurring charges
         order.put("accountId", properties.getSubAccountId());
+        if (request.nombaCustomerId() != null) {
+            order.put("customerId", request.nombaCustomerId()); // ← required by Nomba
+        }
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("order", order);
@@ -157,6 +162,15 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
             log.info("Response from Tokenize card=={}", response);
             if (!apiClient.isSuccessEnvelope(response)) {
                 String description = response != null ? response.path("description").asText("unknown_error") : "unknown_error";
+                if (response != null) {
+                    JsonNode dataMsg = response.path("data").path("message");
+                    if (!dataMsg.isMissingNode() && dataMsg.asText("").toLowerCase().contains("order already exists")) {
+                        log.error("[NOMBA] Duplicate orderReference detected — idemKey={} This is a SubPilot bug, not a card decline.",
+                                request.idempotencyKey());
+                        return new ChargeResponse(false, null, "duplicate_order_reference",
+                                "Order reference already used — SubPilot retry misconfiguration");
+                    }
+                }
                 log.warn("[NOMBA] Charge rejected at envelope level — idemKey={} description={} rawResponse={}",
                         request.idempotencyKey(), description, response);
                 return new ChargeResponse(false, null, "charge_rejected", description);

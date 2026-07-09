@@ -259,7 +259,7 @@ public class ProrationService {
         PaymentAttempt attempt = paymentService.charge(
                 sub.getMerchantId(), invoice.getId(), sub.getId(),
                 sub.getNombaCardTokenRef(), amount, newPlan.getCurrency(), customer.getEmail(),
-                idempotencyKey
+                idempotencyKey, customer.getNombaCustomerId()
         );
 
         if (attempt.isSucceeded()) {

@@ -205,7 +205,7 @@ public class DunningTriggerService {
 
         // ── Retry charge ───────────────────────────────────────────────────
         if ("retry_charge".equals(step.getAction()) || "both".equals(step.getAction())) {
-            chargeSucceeded = attemptCharge(sub, invoice);
+            chargeSucceeded = attemptCharge(sub, invoice, step.getStepNumber());
         }
 
         // ── Send email ─────────────────────────────────────────────────────
@@ -224,25 +224,42 @@ public class DunningTriggerService {
         }
     }
 
-    private boolean attemptCharge(Subscription sub, Invoice invoice) {
+    private boolean attemptCharge(Subscription sub, Invoice invoice, int stepNumber) {
         String cardToken = sub.getNombaCardTokenRef();
         if (cardToken == null) return false;
 
-        String idempotencyKey = "invoice:" + invoice.getId();
-        // Check idempotency
-        var existingSucceeded = paymentAttemptRepository.findByIdempotencyKey(idempotencyKey)
+        // DB idempotency key: still per-invoice (success is terminal regardless of step)
+        String dbIdempotencyKey = "invoice:" + invoice.getId();
+
+        // Short-circuit if a prior step already succeeded for this invoice
+        var existingSucceeded = paymentAttemptRepository.findByIdempotencyKey(dbIdempotencyKey)
                 .filter(a -> "succeeded".equals(a.getStatus()));
         if (existingSucceeded.isPresent()) {
-            return true; // already succeeded
+            return true;
         }
+
+        // Nomba orderReference must be unique PER ATTEMPT to avoid the
+        // "An order already exists with this order reference" 400 on retries.
+        // We scope it to the invoice + dunning step so re-runs of the same step
+        // (scheduler crash/restart) are still idempotent at Nomba's level too.
+        String nombaOrderReference = "invoice:" + invoice.getId() + ":step:" + stepNumber;
+
+        // Also guard against inserting a duplicate failed attempt for this step
+        // if the scheduler runs twice before currentStep is persisted
+        String stepIdempotencyKey = nombaOrderReference;
+        var existingAttempt = paymentAttemptRepository.findByIdempotencyKey(stepIdempotencyKey);
+        if (existingAttempt.isPresent() && existingAttempt.get().isTerminal()) {
+            return "succeeded".equals(existingAttempt.get().getStatus());
+        }
+
         Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
                 .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
 
         NombaPaymentGateway.ChargeResponse charge = nomba.chargeToken(
                 new NombaPaymentGateway.ChargeRequest(
-                        cardToken, idempotencyKey, invoice.getAmount(),
+                        cardToken, nombaOrderReference, invoice.getAmount(),
                         invoice.getCurrency(), customer.getEmail(),
-                        sub.getId(), invoice.getId()
+                        sub.getId(), customer.getNombaCustomerId(), invoice.getId()
                 )
         );
 
@@ -251,13 +268,14 @@ public class DunningTriggerService {
         newAttempt.setMerchantId(sub.getMerchantId());
         newAttempt.setInvoiceId(invoice.getId());
         newAttempt.setSubscriptionId(sub.getId());
-        newAttempt.setIdempotencyKey(idempotencyKey);
+        newAttempt.setIdempotencyKey(stepIdempotencyKey); // scoped to step, not just invoice
         newAttempt.setAmount(invoice.getAmount());
         newAttempt.setCurrency(invoice.getCurrency());
         newAttempt.setStatus(charge.success() ? "succeeded" : "failed");
         newAttempt.setNombaReference(charge.reference());
         newAttempt.setFailureCode(charge.failureCode());
         newAttempt.setFailureReason(charge.failureReason());
+        newAttempt.setAttemptedAt(Instant.now());
         newAttempt.setResolvedAt(Instant.now());
         paymentAttemptRepository.save(newAttempt);
 
@@ -451,22 +469,32 @@ public class DunningTriggerService {
      */
     private void recordSelfCurePayment(Subscription sub, Invoice invoice, String nombaReference) {
         String idempotencyKey = "invoice:" + invoice.getId();
-        if (paymentAttemptRepository.findByIdempotencyKey(idempotencyKey)
-                .filter(a -> "succeeded".equals(a.getStatus())).isPresent()) {
-            return;
+
+        // Re-use existing attempt record if present (upsert pattern),
+        // rather than always inserting — avoids unique constraint violation
+        // when a prior dunning retry already recorded a failed attempt with
+        // this key.
+        PaymentAttempt attempt = paymentAttemptRepository
+                .findByIdempotencyKey(idempotencyKey)
+                .orElseGet(PaymentAttempt::new);
+
+        if ("succeeded".equals(attempt.getStatus())) {
+            return; // already recorded as success, nothing to do
         }
 
-        PaymentAttempt attempt = new PaymentAttempt();
-        attempt.setId(com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString());
-        attempt.setMerchantId(sub.getMerchantId());
-        attempt.setInvoiceId(invoice.getId());
-        attempt.setSubscriptionId(sub.getId());
-        attempt.setIdempotencyKey(idempotencyKey);
-        attempt.setAmount(invoice.getAmount());
-        attempt.setCurrency(invoice.getCurrency());
+        if (attempt.getId() == null) {
+            attempt.setId(com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString());
+            attempt.setMerchantId(sub.getMerchantId());
+            attempt.setInvoiceId(invoice.getId());
+            attempt.setSubscriptionId(sub.getId());
+            attempt.setIdempotencyKey(idempotencyKey);
+            attempt.setAmount(invoice.getAmount());
+            attempt.setCurrency(invoice.getCurrency());
+        }
+
         attempt.setStatus("succeeded");
         attempt.setNombaReference(nombaReference);
         attempt.setResolvedAt(Instant.now());
-        paymentAttemptRepository.save(attempt);
+        paymentAttemptRepository.save(attempt);  // UPDATE if existing, INSERT if new
     }
 }

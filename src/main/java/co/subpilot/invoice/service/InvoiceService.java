@@ -135,30 +135,6 @@ public class InvoiceService {
     }
 
     /**
-     * Marks an invoice paid without a known provider reference (e.g. invoked
-     * from the inbound Nomba webhook handler where the reference was already
-     * recorded on the PaymentAttempt). Does NOT apply the platform fee —
-     * callers that have a fresh successful charge should use the 2-arg
-     * overload below so SubPilot's cut is taken exactly once per invoice.
-     */
-    @Transactional
-    public Invoice markPaid(String invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("invoice", invoiceId));
-        if (InvoiceStatus.PAID.equals(invoice.getStatus())) {
-            return invoice; // idempotent — already paid, e.g. duplicate webhook delivery
-        }
-        invoice.setStatus(InvoiceStatus.PAID);
-        invoice.setPaidAt(Instant.now());
-        invoice = invoiceRepository.save(invoice);
-
-        eventService.recordWithSubscription(invoice.getMerchantId(), EventType.INVOICE_PAID, "invoice", invoice.getId(),
-                invoice.getSubscriptionId(), Map.of("amount", invoice.getAmount()));
-
-        return invoice;
-    }
-
-    /**
      * Marks an invoice paid, applies SubPilot's platform fee, and records
      * which PaymentAttempt produced the charge — giving the platform_fees
      * ledger row a real traceable link back to the attempt instead of null.

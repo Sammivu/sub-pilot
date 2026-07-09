@@ -40,7 +40,7 @@ public class PaymentService {
     public PaymentAttempt charge(
             String merchantId, String invoiceId, String subscriptionId,
             String cardToken, long amount, String currency, String customerEmail,
-            String idempotencyKey
+            String idempotencyKey, String nombaCustomerId
     ) {
         // ── Idempotency check ────────────────────────────────────────────────
         var existing = paymentAttemptRepository.findByIdempotencyKey(idempotencyKey);
@@ -65,7 +65,7 @@ public class PaymentService {
 
         // ── Call Nomba (or mock) ─────────────────────────────────────────────
         var response = nombaPaymentGateway.chargeToken(new NombaPaymentGateway.ChargeRequest(
-                cardToken, idempotencyKey, amount, currency, customerEmail, subscriptionId, invoiceId
+                cardToken, idempotencyKey, amount, currency, customerEmail, subscriptionId, nombaCustomerId, invoiceId
         ));
 
         if (response.success()) {
