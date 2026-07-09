@@ -9,11 +9,14 @@ import co.subpilot.nomba.dto.TokenizedCardData;
 import co.subpilot.subscription.entity.Subscription;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,8 +28,10 @@ import java.util.Map;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
-
     private final NombaPaymentGateway nomba;
+    private static final String SAVED_CARDS_CACHE_PREFIX = "customer:saved-cards:";
+    private static final Duration SAVED_CARDS_CACHE_TTL = Duration.ofMinutes(60);
+    private final RedisTemplate<String, Object> redisTemplate;
 
     /**
      * Max pages to scan looking for this customer's email — Nomba's list
@@ -45,7 +50,16 @@ public class CustomerService {
      * entirely. This is enrichment, not the source of truth (the
      * customer's own cardToken/cardLast4/cardBrand columns remain that).
      */
+    @SuppressWarnings("unchecked")
     public List<NombaPaymentGateway.TokenizedCard> fetchSavedCards(String customerEmail) {
+
+        String cacheKey = SAVED_CARDS_CACHE_PREFIX + customerEmail.toLowerCase();
+        List<NombaPaymentGateway.TokenizedCard> cached = (List<NombaPaymentGateway.TokenizedCard>) redisTemplate.opsForValue().get(cacheKey);
+
+        if (cached != null) {
+            log.debug("Loaded saved cards from Redis for {}", customerEmail);
+            return cached;
+        }
         Map<String, NombaPaymentGateway.TokenizedCard> uniqueCards = new LinkedHashMap<>();
         String page = null;
         int pagesScanned = 0;
@@ -68,8 +82,9 @@ public class CustomerService {
             log.warn("Failed to fetch saved cards from Nomba for customerEmail={}: {}", customerEmail, e.getMessage());
             return List.of();
         }
-        return new ArrayList<>(uniqueCards.values());
-    }
+        List<NombaPaymentGateway.TokenizedCard> cards = new ArrayList<>(uniqueCards.values());
+        redisTemplate.opsForValue().set(cacheKey, cards, SAVED_CARDS_CACHE_TTL);
+        return cards;    }
 
 
     /**

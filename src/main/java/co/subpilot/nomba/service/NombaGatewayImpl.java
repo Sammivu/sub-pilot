@@ -154,8 +154,11 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
             // caveat on initiateRefund below.
             JsonNode response = apiClient.post(checkoutBasePath() + "/tokenized-card-payment", body);
 
+            log.info("Response from Tokenize card=={}", response);
             if (!apiClient.isSuccessEnvelope(response)) {
                 String description = response != null ? response.path("description").asText("unknown_error") : "unknown_error";
+                log.warn("[NOMBA] Charge rejected at envelope level — idemKey={} description={} rawResponse={}",
+                        request.idempotencyKey(), description, response);
                 return new ChargeResponse(false, null, "charge_rejected", description);
             }
 
@@ -175,7 +178,8 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
                         request.idempotencyKey(), request.amountKobo(), request.subscriptionId());
                 return new ChargeResponse(true, reference, null, null);
             } else {
-                log.warn("[NOMBA] Charge DECLINED — idemKey={} reason={}", request.idempotencyKey(), message);
+                log.warn("[NOMBA] Charge DECLINED — idemKey={} reason={} rawResponse={}",
+                        request.idempotencyKey(), message, response);
                 return new ChargeResponse(false, null, "declined", message.isBlank() ? "Charge declined by issuer." : message);
             }
 

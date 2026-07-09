@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,9 +64,16 @@ public class BillingEngineJob {
     private final CustomerRepository customerRepository;
     private final DunningTriggerService dunningTriggerService;
     private final NotificationService notificationService;
+    private enum RenewalOutcome { CHARGED, FAILED, SKIPPED }
+    private final RedisTemplate<String, Object> redisTemplate;
+    private static final String SAVED_CARDS_CACHE_PREFIX = "customer:saved-cards:";
 
     @Value("${subpilot.billing.job-enabled:true}")
     private boolean jobEnabled;
+
+    public void evictSavedCards(String customerId) {
+        redisTemplate.delete(SAVED_CARDS_CACHE_PREFIX + customerId.toLowerCase());
+    }
 
     @Scheduled(fixedDelayString = "${subpilot.billing.interval-ms:300000}")
     @SchedulerLock(name = "billing_engine", lockAtLeastFor = "PT4M", lockAtMostFor = "PT10M")
@@ -76,22 +84,26 @@ public class BillingEngineJob {
         if (due.isEmpty()) return;
 
         log.info("Billing engine: {} subscriptions due for renewal", due.size());
-        int succeeded = 0, failed = 0;
+        int succeeded = 0, failed = 0, skipped = 0;
 
         for (Subscription sub : due) {
             try {
-                processRenewal(sub);
-                succeeded++;
+                RenewalOutcome outcome = processRenewal(sub);
+                switch (outcome) {
+                    case CHARGED -> succeeded++;
+                    case FAILED -> failed++;
+                    case SKIPPED -> skipped++;
+                }
             } catch (Exception e) {
                 log.error("Billing error for subscription {}: {}", sub.getId(), e.getMessage(), e);
                 failed++;
             }
         }
-        log.info("Billing engine complete — succeeded={} failed={}", succeeded, failed);
+        log.info("Billing engine complete — succeeded={} failed={} skipped={}", succeeded, failed, skipped);
     }
 
     @Transactional
-    public void processRenewal(Subscription sub) {
+    public RenewalOutcome processRenewal(Subscription sub) {
         Plan plan = planRepository.findById(sub.getPlanId())
                 .orElseThrow(() -> new RuntimeException("Plan not found: " + sub.getPlanId()));
 
@@ -104,7 +116,7 @@ public class BillingEngineJob {
         // already paid for ends — not "charge once more, then stop."
         if (Boolean.TRUE.equals(sub.isCancelAtPeriodEnd())) {
             finalizeScheduledCancellation(sub);
-            return;
+            return RenewalOutcome.SKIPPED;
         }
 
         Instant periodStart = sub.getNextBillingDate();
@@ -115,7 +127,7 @@ public class BillingEngineJob {
         var existingAttempt = paymentAttemptRepository.findByIdempotencyKey(idempotencyKey);
         if (existingAttempt.isPresent() && existingAttempt.get().isTerminal()) {
             log.debug("Skipping duplicate billing for subscription {} (idempotency key already resolved)", sub.getId());
-            return;
+            return RenewalOutcome.SKIPPED;
         }
 
         // ── Create invoice ─────────────────────────────────────────────────
@@ -126,7 +138,7 @@ public class BillingEngineJob {
         if (invoice.isPaid()) {
             log.debug("Invoice already paid for subscription {} period {}", sub.getId(), periodStart);
             advanceBillingDate(sub, plan, periodEnd);
-            return;
+            return RenewalOutcome.CHARGED;
         }
 
         // ── Create payment attempt ─────────────────────────────────────────
@@ -134,7 +146,7 @@ public class BillingEngineJob {
         if (cardToken == null || cardToken.isBlank()) {
             log.warn("No card token for subscription {} — cannot charge", sub.getId());
             handleFailure(sub, invoice, null, "no_card_token", "No payment method on file.");
-            return;
+            return RenewalOutcome.FAILED;
         }
 
         PaymentAttempt newAttempt = new PaymentAttempt();
@@ -161,8 +173,10 @@ public class BillingEngineJob {
 
         if (charge.success()) {
             handleSuccess(sub, invoice, attempt, charge.reference(), plan, periodEnd);
+            return RenewalOutcome.CHARGED;
         } else {
             handleFailure(sub, invoice, attempt, charge.failureCode(), charge.failureReason());
+            return RenewalOutcome.FAILED;
         }
     }
 
@@ -267,6 +281,10 @@ public class BillingEngineJob {
                 log.warn("Failed to delete Nomba tokenized card for subscription={} token={}: {}",
                         sub.getId(), tokenRef, result.failureReason());
             }
+            Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
+                    .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
+            evictSavedCards(customer.getEmail());
+
         } catch (Exception e) {
             log.error("Error deleting Nomba tokenized card for subscription={} token={}: {}",
                     sub.getId(), tokenRef, e.getMessage(), e);

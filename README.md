@@ -15,7 +15,19 @@ Recurring billing infrastructure for African businesses — built on Nomba payme
 - OpenApi Swagger Docs (https://nomba-subpilot.duckdns.org/api/swagger-ui/index.html and https://nomba-subpilot.duckdns.org/api/v3/api-docs)
 
 ---
+## Quick Start (Prod)
+Merchant BaseUrl: 
+Merchant login:
+: username:taofeeqomotolani@gmail.com 
+: password: @Tolani98
 
+
+Admin BaseUrl: https://subpilot-web.subpilot-app.workers.dev/internal/login
+Admin login: (super admin profile)
+: username: admin@subpilot.co
+: password: P@ssw0rd1
+
+---
 ## Quick Start (Local)
 
 ### Prerequisites
