@@ -109,6 +109,7 @@ public class NombaReconciliationJob {
             try {
                 String orderReference = CheckoutPurpose.CARD_UPDATE_PREFIX + sub.getId();
                 VerificationResponse result = nomba.verifyTransaction(orderReference);
+                log.info("Verification result========{}", result);
 
                 if (result.success()) {
                     reconciliationService.resolveCardUpdateCheckout(sub.getId(), result.cardToken(), result.customerId(), result.transactionId(),"tsq");
