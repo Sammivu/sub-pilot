@@ -20,8 +20,6 @@ import co.subpilot.subscription.enums.SubscriptionStatus;
 import co.subpilot.subscription.SubscriptionStateMachine;
 import co.subpilot.subscription.repository.SubscriptionRepository;
 import co.subpilot.subscription.service.SubscriptionService;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -31,7 +29,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -77,11 +74,6 @@ public class BillingEngineJob {
     public void evictSavedCards(String customerId) {
         redisTemplate.delete(SAVED_CARDS_CACHE_PREFIX + customerId.toLowerCase());
     }
-    private final Cache<String, List<NombaPaymentGateway.TokenizedCard>> savedCardsCache =
-            Caffeine.newBuilder()
-                    .expireAfterWrite(Duration.ofMinutes(120))
-                    .maximumSize(10_000)
-                    .build();
 
     @Scheduled(fixedDelayString = "${subpilot.billing.interval-ms:300000}")
     @SchedulerLock(name = "billing_engine", lockAtLeastFor = "PT4M", lockAtMostFor = "PT10M")
@@ -291,7 +283,8 @@ public class BillingEngineJob {
             }
             Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
                     .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
-            savedCardsCache.invalidate(customer.getEmail().toLowerCase());
+            evictSavedCards(customer.getEmail());
+
         } catch (Exception e) {
             log.error("Error deleting Nomba tokenized card for subscription={} token={}: {}",
                     sub.getId(), tokenRef, e.getMessage(), e);
