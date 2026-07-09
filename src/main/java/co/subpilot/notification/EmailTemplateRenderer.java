@@ -26,7 +26,7 @@ public final class EmailTemplateRenderer {
                 bodyHtml = """
                     <p>Hi {{customerName}},</p>
                     <p>Your subscription to <strong>{{planName}}</strong> with {{merchantName}} is now active.</p>
-                    <p>You'll be billed <strong>{{amount}}</strong> every {{billingInterval}}, starting today.</p>
+                    <p>You'll be billed <strong>{{amount}}</strong>  {{billingInterval}}, starting today.</p>
                     <p><a href="{{portalUrl}}" style="color:#4f46e5;">Manage your subscription</a></p>
                     """;
             }
