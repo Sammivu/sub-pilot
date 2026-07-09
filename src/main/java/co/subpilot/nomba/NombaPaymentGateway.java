@@ -145,6 +145,7 @@ public interface NombaPaymentGateway {
             String currency,
             String customerEmail,
             String subscriptionId,
+            String nombaCustomerId,
             String invoiceId
     ) {}
 

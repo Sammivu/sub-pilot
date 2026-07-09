@@ -17,10 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -42,7 +39,7 @@ public class CustomerService {
      * scan turning a single customer-detail request into dozens of Nomba
      * API calls for a busy merchant.
      */
-    private static final int MAX_PAGES_SCANNED = 20;
+    private static final int MAX_PAGES_SCANNED = 5;
 
     /**
      * Best-effort — returns an empty list on any failure rather than
@@ -52,20 +49,29 @@ public class CustomerService {
      */
     @SuppressWarnings("unchecked")
     public List<NombaPaymentGateway.TokenizedCard> fetchSavedCards(String customerEmail) {
-
         String cacheKey = SAVED_CARDS_CACHE_PREFIX + customerEmail.toLowerCase();
-        List<NombaPaymentGateway.TokenizedCard> cached = (List<NombaPaymentGateway.TokenizedCard>) redisTemplate.opsForValue().get(cacheKey);
+
+        List<NombaPaymentGateway.TokenizedCard> cached =
+                (List<NombaPaymentGateway.TokenizedCard>) redisTemplate.opsForValue().get(cacheKey);
 
         if (cached != null) {
             log.debug("Loaded saved cards from Redis for {}", customerEmail);
             return cached;
         }
         Map<String, NombaPaymentGateway.TokenizedCard> uniqueCards = new LinkedHashMap<>();
+        Set<String> visitedPages = new HashSet<>();
         String page = null;
         int pagesScanned = 0;
 
         try {
             do {
+                // Prevent pagination loops (e.g. 2 -> 0 -> 2 -> 0)
+                String currentPage = (page == null) ? "FIRST" : page;
+                if (!visitedPages.add(currentPage)) {
+                    log.warn("Detected pagination loop while fetching saved cards. page={}", currentPage);
+                    break;
+                }
+                log.debug("Fetching tokenized cards page={}", currentPage);
                 var result = nomba.listTokenizedCards(page);
 
                 for (var card : result.cards()) {
@@ -73,18 +79,22 @@ public class CustomerService {
                         uniqueCards.putIfAbsent(card.tokenKey(), card);
                     }
                 }
-
-                page = result.nextPage();
+                String nextPage = result.nextPage();
+                log.debug("Current page={}, nextPage={}", currentPage, nextPage);
+                page = nextPage;
                 pagesScanned++;
             } while (page != null && pagesScanned < MAX_PAGES_SCANNED);
 
         } catch (Exception e) {
-            log.warn("Failed to fetch saved cards from Nomba for customerEmail={}: {}", customerEmail, e.getMessage());
+            log.warn("Failed to fetch saved cards from Nomba for customerEmail={}: {}",
+                    customerEmail, e.getMessage(), e);
             return List.of();
         }
         List<NombaPaymentGateway.TokenizedCard> cards = new ArrayList<>(uniqueCards.values());
         redisTemplate.opsForValue().set(cacheKey, cards, SAVED_CARDS_CACHE_TTL);
-        return cards;    }
+
+        return cards;
+    }
 
 
     /**

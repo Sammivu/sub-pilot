@@ -167,7 +167,7 @@ public class BillingEngineJob {
                 new NombaPaymentGateway.ChargeRequest(
                         cardToken, idempotencyKey, plan.getAmount(),
                         plan.getCurrency(), customer.getEmail(),
-                        sub.getId(), invoice.getId()
+                        sub.getId(), customer.getNombaCustomerId(), invoice.getId()
                 )
         );
 
