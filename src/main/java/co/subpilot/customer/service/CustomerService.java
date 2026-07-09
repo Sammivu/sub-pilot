@@ -7,6 +7,8 @@ import co.subpilot.nomba.NombaPaymentGateway;
 import co.subpilot.webhook.dto.NombaWebhookEvent;
 import co.subpilot.nomba.dto.TokenizedCardData;
 import co.subpilot.subscription.entity.Subscription;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -30,6 +32,12 @@ public class CustomerService {
     private static final Duration SAVED_CARDS_CACHE_TTL = Duration.ofMinutes(60);
     private final RedisTemplate<String, Object> redisTemplate;
 
+    private final Cache<String, List<NombaPaymentGateway.TokenizedCard>> savedCardsCache =
+            Caffeine.newBuilder()
+                    .expireAfterWrite(Duration.ofMinutes(120))
+                    .maximumSize(10_000)
+                    .build();
+
     /**
      * Max pages to scan looking for this customer's email — Nomba's list
      * endpoint is per-ACCOUNT (all customers, all merchants sharing this
@@ -49,14 +57,11 @@ public class CustomerService {
      */
     @SuppressWarnings("unchecked")
     public List<NombaPaymentGateway.TokenizedCard> fetchSavedCards(String customerEmail) {
-        String cacheKey = SAVED_CARDS_CACHE_PREFIX + customerEmail.toLowerCase();
-        log.info("Looking up Redis key={}", cacheKey);
+        String cacheKey = customerEmail.toLowerCase();
 
-        List<NombaPaymentGateway.TokenizedCard> cached =
-                (List<NombaPaymentGateway.TokenizedCard>) redisTemplate.opsForValue().get(cacheKey);
-        log.info("Redis hit={}", cached != null);
+        List<NombaPaymentGateway.TokenizedCard> cached = savedCardsCache.getIfPresent(cacheKey);
         if (cached != null) {
-            log.debug("Loaded saved cards from Redis for {}", customerEmail);
+            log.debug("Loaded saved cards from in-memory cache for {}", customerEmail);
             return cached;
         }
         Map<String, NombaPaymentGateway.TokenizedCard> uniqueCards = new LinkedHashMap<>();
@@ -92,7 +97,7 @@ public class CustomerService {
             return List.of();
         }
         List<NombaPaymentGateway.TokenizedCard> cards = new ArrayList<>(uniqueCards.values());
-        redisTemplate.opsForValue().set(cacheKey, cards, SAVED_CARDS_CACHE_TTL);
+        savedCardsCache.put(cacheKey, cards);
 
         return cards;
     }
