@@ -111,7 +111,7 @@ public class NombaReconciliationJob {
                 VerificationResponse result = nomba.verifyTransaction(orderReference);
 
                 if (result.success()) {
-                    reconciliationService.resolveCardUpdateCheckout(sub.getId(), result.cardToken(), result.customerId(), "tsq");
+                    reconciliationService.resolveCardUpdateCheckout(sub.getId(), result.cardToken(), result.customerId(), result.transactionId(),"tsq");
                 } else {
                     log.debug("TSQ: subscription={} card-update checkout still not confirmed (status={})",
                             sub.getId(), result.status());

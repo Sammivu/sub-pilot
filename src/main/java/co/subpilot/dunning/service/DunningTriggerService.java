@@ -24,7 +24,9 @@ import co.subpilot.subscription.repository.SubscriptionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +56,10 @@ public class DunningTriggerService {
     private final EventService eventService;
     private final NombaPaymentGateway nomba;
     private final NotificationService notificationService;
+
+    @Autowired
+    @Lazy
+    private DunningTriggerService self;
 
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
@@ -105,7 +111,7 @@ public class DunningTriggerService {
 
         for (DunningExecution execution : active) {
             try {
-                processExecution(execution);
+                self.processExecution(execution);
             } catch (Exception e) {
                 log.error("Dunning error for execution {}: {}", execution.getId(), e.getMessage(), e);
             }
@@ -385,48 +391,82 @@ public class DunningTriggerService {
     // ── Self-cure: subscriber updates payment method via portal ──────────────
 
     @Transactional
-    public void resolveViaSelfCure(String subscriptionToken, String newCardToken, String nombaCustomerId) {
+    public void resolveViaSelfCure(String subscriptionToken, String newCardToken, String nombaReference, String nombaCustomerId) {
         Subscription sub = subscriptionRepository.findBySubscriptionToken(subscriptionToken)
                 .orElseThrow(() -> new RuntimeException("Invalid subscription token"));
 
-        // Update card token
         sub.setNombaCardTokenRef(newCardToken);
         sub.setNombaCustomerRef(nombaCustomerId);
-        sub.setPendingCardUpdateAt(null); // resolved — TSQ no longer needs to chase this one
+        sub.setPendingCardUpdateAt(null);
         subscriptionRepository.save(sub);
 
-        // Keep the customer's record in sync too — mirrors activateAfterCheckout,
-        // so the customer's most recently used card is reflected account-wide,
-        // not just on this one subscription.
         customerRepository.findById(sub.getCustomerId()).ifPresent(c -> {
             c.setCardToken(newCardToken);
             c.setNombaCustomerId(nombaCustomerId);
             customerRepository.save(c);
         });
 
-        // Find active dunning execution and attempt charge
         executionRepository.findBySubscriptionIdAndStatus(sub.getId(), "active")
                 .ifPresent(execution -> {
-                    DunningExecution lockedExecution =
-                            executionRepository.findByIdForUpdate(execution.getId())
-                                    .orElseThrow(() -> new RuntimeException("Dunning execution disappeared: " + execution.getId()));
-                    // Scheduler may already have completed while we waited
-                    if (!"active".equals(lockedExecution.getStatus())) {
-                        return;
-                    }
-                    invoiceRepository.findById(lockedExecution.getInvoiceId())
-                            .ifPresent(invoice -> {
-                                if (invoice.isPaid()) {
-                                    return;
-                                }
-                                boolean charged = attemptCharge(sub, invoice);
-                                if (charged) {
-                                    resolveDunning(lockedExecution, sub, invoice);
-                                }
+                            DunningExecution lockedExecution =
+                                    executionRepository.findByIdForUpdate(execution.getId())
+                                            .orElseThrow(() -> new RuntimeException("Dunning execution disappeared: " + execution.getId()));
+                            if (!"active".equals(lockedExecution.getStatus())) {
+                                return;
                             }
-                    );
+                            invoiceRepository.findById(lockedExecution.getInvoiceId())
+                                    .ifPresent(invoice -> {
+                                                if (invoice.isPaid()) {
+                                                    return;
+                                                }
+                                                // The card-update checkout itself already charged
+                                                // the customer (see PortalController.updateCard —
+                                                // it now charges the specific outstanding invoice
+                                                // amount). nombaReference is that checkout's real
+                                                // Nomba transaction id. Previously this called
+                                                // attemptCharge() here, firing a SEPARATE,
+                                                // independent charge via chargeToken() with its
+                                                // own orderReference — completely unrelated to
+                                                // the payment the customer just made in their
+                                                // browser. If that second charge failed for any
+                                                // reason, nothing ever resolved, even though the
+                                                // customer had already paid. Record the
+                                                // checkout's own payment directly instead.
+                                                recordSelfCurePayment(sub, invoice, nombaReference);
+                                                invoiceService.markPaid(invoice.getId(), nombaReference);
+                                                resolveDunning(lockedExecution, sub, invoice);
+                                            }
+                                    );
+                        }
+                );
+    }
 
-                }
-        );
+    /**
+     * Records a PaymentAttempt reflecting the card-update checkout's own
+     * payment — same audit-trail purpose attemptCharge() serves for a
+     * server-initiated charge, just sourced from the checkout instead of a
+     * second chargeToken() call. Same idempotencyKey convention ("invoice:"
+     * + invoiceId) as attemptCharge uses, so if webhook and TSQ both resolve
+     * this (a real possible race), the second call is a safe no-op.
+     */
+    private void recordSelfCurePayment(Subscription sub, Invoice invoice, String nombaReference) {
+        String idempotencyKey = "invoice:" + invoice.getId();
+        if (paymentAttemptRepository.findByIdempotencyKey(idempotencyKey)
+                .filter(a -> "succeeded".equals(a.getStatus())).isPresent()) {
+            return;
+        }
+
+        PaymentAttempt attempt = new PaymentAttempt();
+        attempt.setId(com.github.f4b6a3.ulid.UlidCreator.getMonotonicUlid().toString());
+        attempt.setMerchantId(sub.getMerchantId());
+        attempt.setInvoiceId(invoice.getId());
+        attempt.setSubscriptionId(sub.getId());
+        attempt.setIdempotencyKey(idempotencyKey);
+        attempt.setAmount(invoice.getAmount());
+        attempt.setCurrency(invoice.getCurrency());
+        attempt.setStatus("succeeded");
+        attempt.setNombaReference(nombaReference);
+        attempt.setResolvedAt(Instant.now());
+        paymentAttemptRepository.save(attempt);
     }
 }
