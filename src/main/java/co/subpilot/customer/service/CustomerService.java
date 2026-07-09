@@ -50,10 +50,11 @@ public class CustomerService {
     @SuppressWarnings("unchecked")
     public List<NombaPaymentGateway.TokenizedCard> fetchSavedCards(String customerEmail) {
         String cacheKey = SAVED_CARDS_CACHE_PREFIX + customerEmail.toLowerCase();
+        log.info("Looking up Redis key={}", cacheKey);
 
         List<NombaPaymentGateway.TokenizedCard> cached =
                 (List<NombaPaymentGateway.TokenizedCard>) redisTemplate.opsForValue().get(cacheKey);
-
+        log.info("Redis hit={}", cached != null);
         if (cached != null) {
             log.debug("Loaded saved cards from Redis for {}", customerEmail);
             return cached;
