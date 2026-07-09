@@ -4,6 +4,7 @@ import co.subpilot.common.exception.BusinessRuleException;
 import co.subpilot.common.exception.ResourceNotFoundException;
 import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.repository.CustomerRepository;
+import co.subpilot.dunning.repository.DunningExecutionRepository;
 import co.subpilot.invoice.entity.Invoice;
 import co.subpilot.invoice.repository.InvoiceRepository;
 import co.subpilot.nomba.CheckoutPurpose;
@@ -57,6 +58,7 @@ public class PortalController {
     private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
     private final NombaPaymentGateway nomba;
+    private final DunningExecutionRepository dunningExecutionRepository;
 
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
@@ -118,17 +120,28 @@ public class PortalController {
         Customer customer = customerRepository.findByIdAndMerchantId(sub.getCustomerId(), sub.getMerchantId())
                 .orElseThrow(() -> new ResourceNotFoundException("customer", sub.getCustomerId()));
 
-        // A nominal re-auth amount isn't charged to the customer here — this
-        // checkout's sole purpose is capturing a fresh card token. Nomba's
-        // checkout flow requires an amount field regardless, so we pass the
-        // plan's normal price; the actual settlement still only happens on
-        // the next real billing-engine renewal, not from this checkout.
+        // Previous comment here claimed this checkout doesn't actually charge
+        // the customer ("a nominal re-auth amount... settlement happens on the
+        // next renewal instead") — that's incorrect. Nomba's checkout with
+        // tokenizeCard:true and a real amount DOES charge the customer
+        // immediately as part of completing it. So if there's an outstanding
+        // failed invoice (the dunning case — this is what the "update card"
+        // email link is actually for), charge THAT invoice's exact amount, not
+        // just whatever the plan currently costs — those can differ if the
+        // invoice was prorated or the plan's price changed since. See
+        // DunningTriggerService.resolveViaSelfCure for how this checkout's
+        // payment gets applied to that specific invoice once it completes.
+        long amountToCharge = dunningExecutionRepository.findBySubscriptionIdAndStatus(sub.getId(), "active")
+                .flatMap(exec -> invoiceRepository.findById(exec.getInvoiceId()))
+                .map(Invoice::getAmount)
+                .orElse(plan.getAmount());
+
         String callbackUrl = frontendBaseUrl + "/portal/" + subscriptionToken + "/card-updated";
 
         NombaPaymentGateway.CheckoutResponse checkout = nomba.initiateCheckout(
                 new NombaPaymentGateway.CheckoutRequest(
                         CheckoutPurpose.CARD_UPDATE_PREFIX + sub.getId(),
-                        plan.getAmount(),
+                        amountToCharge,
                         plan.getCurrency(),
                         customer.getEmail(),
                         customer.getFullName(),

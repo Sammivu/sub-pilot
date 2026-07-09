@@ -100,7 +100,7 @@ public class NombaReconciliationService {
      * per PaymentAttempt.idempotencyKey.
      */
     @Transactional
-    public void resolveCardUpdateCheckout(String subscriptionId, String cardToken, String nombaCustomerId, String source) {
+    public void resolveCardUpdateCheckout(String subscriptionId, String cardToken, String nombaCustomerId, String nombaReference, String source) {
         Subscription sub = subscriptionRepository.findById(subscriptionId).orElse(null);
         if (sub == null) {
             log.warn("[{}] card-update checkout referenced unknown subscription={}", source, subscriptionId);
@@ -112,7 +112,7 @@ public class NombaReconciliationService {
         }
 
         log.info("[{}] Resolving card update via self-cure for subscription={}", source, subscriptionId);
-        dunningTriggerService.resolveViaSelfCure(sub.getSubscriptionToken(), cardToken, nombaCustomerId);
+        dunningTriggerService.resolveViaSelfCure(sub.getSubscriptionToken(), cardToken, nombaReference ,nombaCustomerId);
     }
 
     /**
