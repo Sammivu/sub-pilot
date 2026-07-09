@@ -91,7 +91,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         order.put("currency", request.currency());
         order.put("accountId", properties.getSubAccountId());
         order.put("allowedPaymentMethods", List.of("Card"));
-        order.put("tokenizeCard", true);
+//        order.put("tokenizeCard", true);
 
         Map<String, Object> metaData = new LinkedHashMap<>();
         metaData.put("merchantReference", request.merchantReference());
@@ -107,7 +107,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("order", order);
-//        body.put("tokenizeCard", true); // required so future renewals can charge without re-entering card details
+        body.put("tokenizeCard", true); // required so future renewals can charge without re-entering card details
 
         try {
             JsonNode response = apiClient.post(checkoutBasePath() + "/order", body);
