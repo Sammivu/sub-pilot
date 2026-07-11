@@ -43,9 +43,11 @@ public class MockNombaGateway implements NombaPaymentGateway {
     @Override
     public CheckoutResponse initiateCheckout(CheckoutRequest request) {
         String reference = "mock_checkout_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-        String checkoutUrl = "http://localhost:5173/mock-checkout?ref=" + reference
-                + "&amount=" + request.amountKobo()
-                + "&email=" + request.customerEmail();
+        String checkoutUrl = request.callbackUrl()
+                + (request.callbackUrl().contains("?") ? "&" : "?")
+                + "ref=" + reference
+                + "&orderId=mock-" + reference
+                + "&orderReference=" + request.merchantReference();
 
         log.info("[MOCK NOMBA] Checkout initiated — ref={} amount={} customer={}",
                 reference, request.amountKobo(), request.customerEmail());
@@ -123,6 +125,13 @@ public class MockNombaGateway implements NombaPaymentGateway {
     public TokenizedCardsPage listTokenizedCards(String page) {
         log.info("[MOCK NOMBA] Listing tokenized cards — page={} (returns empty list in mock mode)", page);
         return new TokenizedCardsPage(java.util.List.of(), null);
+    }
+
+    @Override
+    public VirtualAccountResponse createVirtualAccount(VirtualAccountRequest request) {
+        log.info("[MOCK NOMBA] Virtual account created — ref={}", request.accountReference());
+        return new VirtualAccountResponse(true, "0123456789", "Nomba MFB", "990",
+                request.accountReference(), null);
     }
 
 

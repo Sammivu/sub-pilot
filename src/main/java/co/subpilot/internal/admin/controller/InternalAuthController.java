@@ -1,6 +1,6 @@
 package co.subpilot.internal.admin.controller;
 
-import co.subpilot.internal.admin.dto.InternalAdminAuthDtos;
+import co.subpilot.internal.admin.dto.InternalAdminDtos;
 import co.subpilot.internal.admin.entity.InternalAdmin;
 import co.subpilot.internal.admin.security.InternalSessionCookie;
 import co.subpilot.internal.admin.service.InternalAdminAuthService;
@@ -35,15 +35,15 @@ public class InternalAuthController {
     private long jwtExpirationMs;
 
     @PostMapping("/login")
-    public ResponseEntity<InternalAdminAuthDtos.MeResponse> login(@Valid @RequestBody InternalAdminAuthDtos.LoginRequest req) {
+    public ResponseEntity<InternalAdminDtos.MeResponse> login(@Valid @RequestBody InternalAdminDtos.LoginRequest req) {
         InternalAdminAuthService.LoginResult result = authService.login(req.email(), req.password());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, sessionCookie(result.token()).toString())
-                .body(InternalAdminAuthDtos.MeResponse.from(result.admin()));
+                .body(InternalAdminDtos.MeResponse.from(result.admin()));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<InternalAdminAuthDtos.MeResponse> me() {
+    public ResponseEntity<InternalAdminDtos.MeResponse> me() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String adminId = auth != null ? (String) auth.getPrincipal() : null;
 
@@ -52,7 +52,7 @@ public class InternalAuthController {
         }
 
         InternalAdmin admin = authService.getById(adminId);
-        return ResponseEntity.ok(InternalAdminAuthDtos.MeResponse.from(admin));
+        return ResponseEntity.ok(InternalAdminDtos.MeResponse.from(admin));
     }
 
     @PostMapping("/logout")

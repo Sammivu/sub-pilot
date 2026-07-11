@@ -19,6 +19,7 @@ package co.subpilot.nomba;
 public final class CheckoutPurpose {
     public static final String NEW_SUBSCRIPTION_PREFIX = "checkout_";
     public static final String CARD_UPDATE_PREFIX = "card_update_";
+    public static final String TRANSFER_PREFIX = "transfer_";
 
     private CheckoutPurpose() {}
 
@@ -31,7 +32,13 @@ public final class CheckoutPurpose {
         if (orderReference.startsWith(CARD_UPDATE_PREFIX)) {
             return orderReference.substring(CARD_UPDATE_PREFIX.length());
         }
+        if (orderReference.startsWith(TRANSFER_PREFIX))         return orderReference.substring(TRANSFER_PREFIX.length());
+
         return null;
+    }
+
+    public static boolean isTransfer(String ref) {
+        return ref != null && ref.startsWith(TRANSFER_PREFIX);
     }
 
     public static boolean isCardUpdate(String orderReference) {

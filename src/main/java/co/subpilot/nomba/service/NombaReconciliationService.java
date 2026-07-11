@@ -143,4 +143,15 @@ public class NombaReconciliationService {
             log.info("[{}] PaymentAttempt {} resolved as {}", source, attempt.getId(), attempt.getStatus());
         }, () -> log.debug("[{}] No PaymentAttempt found for nombaReference={}", source, nombaReference));
     }
+
+    @Transactional
+    public void resolveTransferPayment(String subscriptionId, String nombaReference) {
+        Subscription sub = subscriptionRepository.findById(subscriptionId).orElse(null);
+        if (sub == null) {
+            log.warn("[transfer] Unknown subscriptionId={}", subscriptionId);
+            return;
+        }
+
+        dunningTriggerService.resolveViaBankTransfer(subscriptionId, nombaReference);
+    }
 }

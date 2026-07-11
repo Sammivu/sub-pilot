@@ -104,6 +104,8 @@ public interface NombaPaymentGateway {
      */
     TokenizedCardsPage listTokenizedCards(String page);
 
+    VirtualAccountResponse createVirtualAccount(VirtualAccountRequest request);
+
     record DeleteTokenResponse(boolean success, String failureReason) {}
 
     record TokenizedCard(String tokenKey, String customerEmail, String cardType, String cardPan, String tokenExpirationDate) {}
@@ -218,4 +220,21 @@ public interface NombaPaymentGateway {
     ) {}
 
     record BankInfo(String name, String code) {}
+
+    record VirtualAccountRequest(
+            String accountReference,   // becomes the narration — use "transfer_{subscriptionId}"
+            String accountName,        // customer's full name
+            long   expectedAmountKobo, // Nomba can enforce exact-amount matching
+            String currency,
+            String expiryDate
+    ) {}
+
+    record VirtualAccountResponse(
+            boolean success,
+            String  accountNumber,
+            String  bankName,
+            String  bankCode,
+            String  accountReference,
+            String  errorMessage
+    ) {}
 }

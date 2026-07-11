@@ -66,4 +66,5 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
                          @Param("q") String q,
                          Pageable pageable);
 
+    Optional<Invoice> findTopBySubscriptionIdAndStatusOrderByCreatedAtDesc(String id, String failed);
 }
