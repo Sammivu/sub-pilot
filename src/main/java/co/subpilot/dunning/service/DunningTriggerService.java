@@ -32,6 +32,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -78,22 +80,52 @@ public class DunningTriggerService {
                 .findByMerchantIdAndIsDefaultTrue(sub.getMerchantId())
                 .orElseGet(() -> createDefaultCampaign(sub.getMerchantId()));
 
-        DunningExecution execution = executionRepository.save(DunningExecution.builder()
+        // ── Compute VA expiry from campaign grace period ──────────────────────
+        Instant expiry = Instant.now().plus(campaign.getGracePeriodDays() + 1, ChronoUnit.DAYS);
+        String expiryDate = DateTimeFormatter
+                .ofPattern("yyyy-MM-dd HH:mm:ss")
+                .withZone(ZoneOffset.UTC)
+                .format(expiry);
+        // Create virtual account BEFORE saving the execution so we can store the details
+        Customer customer = customerRepository.findById(sub.getCustomerId()).orElseThrow();
+        String accountRef = "transfer_" + sub.getId(); // 35 chars — within 16–64 limit ✅
+
+        NombaPaymentGateway.VirtualAccountResponse va = nomba.createVirtualAccount(
+                new NombaPaymentGateway.VirtualAccountRequest(
+                        accountRef,
+                        padAccountName(customer.getFullName()), // enforce 8-char minimum
+                        invoice.getAmount(), invoice.getCurrency(), expiryDate         // major units, not kobo
+                )
+        );
+
+        DunningExecution.DunningExecutionBuilder builder = DunningExecution.builder()
                 .merchantId(sub.getMerchantId())
                 .subscriptionId(sub.getId())
                 .invoiceId(invoice.getId())
                 .campaignId(campaign.getId())
                 .currentStep(0)
-                .status("active")
-                .build());
+                .status("active");
 
+        if (va.success()) {
+            builder.vaBankName(va.bankName())
+                    .vaAccountNumber(va.accountNumber())
+                    .vaAccountName(va.accountNumber())
+                    .vaAccountRef(accountRef);
+            log.info("Virtual account created for dunning — subscription={} accountNumber={}",
+                    sub.getId(), va.accountNumber());
+        } else {
+            log.warn("Virtual account creation failed for dunning — subscription={} reason={}",
+                    sub.getId(), va.errorMessage());
+        }
+
+        DunningExecution execution = executionRepository.save(builder.build());
         eventService.emit(sub.getMerchantId(), "dunning.started", "subscription",
                 sub.getId(), Map.of("executionId", execution.getId(), "invoiceId", invoice.getId()));
 
         // Notify both the subscriber (payment failed, with self-cure link)
         // and the merchant (PRD §6.9) right away, on the very first failure
         // — not just at later dunning steps.
-        notificationService.sendPaymentFailed(sub, invoice, latestFailureReason(invoice));
+        notificationService.sendPaymentFailed(sub, invoice, latestFailureReason(invoice), execution);
         notificationService.sendPaymentFailedMerchantAlert(sub, invoice, latestFailureReason(invoice));
 
         log.info("Dunning started: subscription={} execution={}", sub.getId(), execution.getId());
@@ -337,7 +369,7 @@ public class DunningTriggerService {
             long daysElapsed = ChronoUnit.DAYS.between(execution.getStartedAt(), Instant.now());
             int daysRemaining = (int) Math.max(0, campaign.getGracePeriodDays() - daysElapsed);
 
-            notificationService.sendDunningWarning(sub, daysRemaining);
+            notificationService.sendDunningWarning(sub, daysRemaining, execution);
             log.info("Dunning email sent: template={} subscription={} daysRemaining={}",
                     template, sub.getId(), daysRemaining);
         } catch (Exception e) {
@@ -496,5 +528,31 @@ public class DunningTriggerService {
         attempt.setNombaReference(nombaReference);
         attempt.setResolvedAt(Instant.now());
         paymentAttemptRepository.save(attempt);  // UPDATE if existing, INSERT if new
+    }
+
+    private String padAccountName(String name) {
+        return name != null && name.length() >= 8 ? name : String.format("%-8s", name).replace(' ', '_');
+    }
+
+    @Transactional
+    public void resolveViaBankTransfer(String subscriptionId, String nombaReference) {
+        executionRepository.findBySubscriptionIdAndStatus(subscriptionId, "active")
+                .ifPresent(execution -> {
+                    DunningExecution locked = executionRepository.findByIdForUpdate(execution.getId())
+                            .orElseThrow();
+                    if (!"active".equals(locked.getStatus())) return;
+
+                    invoiceRepository.findById(locked.getInvoiceId()).ifPresent(invoice -> {
+                        if (invoice.isPaid()) return;
+
+                        recordSelfCurePayment(  // reuse the existing private method
+                                subscriptionRepository.findById(subscriptionId).orElseThrow(),
+                                invoice, nombaReference);
+                        invoiceService.markPaid(invoice.getId(), nombaReference);
+                        resolveDunning(locked,
+                                subscriptionRepository.findById(subscriptionId).orElseThrow(),
+                                invoice);
+                    });
+                });
     }
 }

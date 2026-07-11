@@ -45,7 +45,10 @@ public final class EmailTemplateRenderer {
                     <p>We couldn't process your payment of <strong>{{amount}}</strong> for your {{planName}} subscription with {{merchantName}}.</p>
                     <p>Reason: {{failureReason}}</p>
                     <p>Please update your payment method to keep your subscription active:</p>
-                    <p><a href="{{selfCureUrl}}" style="color:#4f46e5;">Update payment method</a></p>
+                    <p style="margin:24px 0;"> <a href="{{selfCureUrl}}" style="background:#4f46e5;color:#fff;padding:12px 24px;
+                       border-radius:6px;text-decoration:none;font-weight:600;">Update payment method</a>
+                    </p>
+                     {{bankSection}}
                     """;
             }
             case DUNNING_WARNING -> {
@@ -55,6 +58,7 @@ public final class EmailTemplateRenderer {
                     <p>We still haven't been able to process payment for your {{planName}} subscription with {{merchantName}}.</p>
                     <p><strong>Your subscription will be cancelled in {{daysRemaining}} day(s)</strong> unless payment succeeds.</p>
                     <p><a href="{{selfCureUrl}}" style="color:#4f46e5;">Update payment method now</a></p>
+                     {{bankSection}}
                     """;
             }
             case SUBSCRIPTION_SUSPENDED -> {

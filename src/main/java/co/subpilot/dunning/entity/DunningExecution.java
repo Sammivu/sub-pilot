@@ -30,6 +30,19 @@ public class DunningExecution extends BaseEntity {
     @Builder.Default
     private String status = "active"; // active|resolved|exhausted|cancelled
 
+    // DunningExecution.java — add these fields
+    @Column(name = "va_bank_name")
+    private String vaBankName;
+
+    @Column(name = "va_account_number")
+    private String vaAccountNumber;
+
+    @Column(name = "va_account_name")
+    private String vaAccountName;
+
+    @Column(name = "va_account_ref")
+    private String vaAccountRef;
+
     @Column(name = "started_at", nullable = false)
     @Builder.Default
     private Instant startedAt = Instant.now();

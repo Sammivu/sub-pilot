@@ -90,8 +90,7 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         order.put("amount", toMajorUnitsString(request.amountKobo()));
         order.put("currency", request.currency());
         order.put("accountId", properties.getSubAccountId());
-        order.put("allowedPaymentMethods", List.of("Card"));
-//        order.put("tokenizeCard", true);
+        order.put("allowedPaymentMethods", List.of("Card", "Transfer"));
 
         Map<String, Object> metaData = new LinkedHashMap<>();
         metaData.put("merchantReference", request.merchantReference());
@@ -279,43 +278,6 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
      * call in this class, which are all /v1). Request shape and response
      * both confirmed directly from Nomba's own curl example, not inferred.
      */
-//    @Override
-//    public TransferResponse initiateBankTransfer(BankTransferRequest request) {
-//        Map<String, Object> body = new LinkedHashMap<>();
-//        body.put("amount", toMajorUnitsNumber(request.amountKobo()));
-//        body.put("accountNumber", request.accountNumber());
-//        body.put("accountName", request.accountName());
-//        body.put("bankCode", request.bankCode());
-//        body.put("merchantTxRef", request.idempotencyKey());
-//        body.put("senderName", "SubPilot");
-//        body.put("narration", request.narration() != null ? request.narration() : "SubPilot payout");
-//
-//        try {
-//            JsonNode response = apiClient.post("/v2/transfers/bank", body);
-//            log.info("Transfer response:\n{}", response.toPrettyString());
-//
-//            if (!apiClient.isSuccessEnvelope(response)) {
-//                String description = response != null ? response.path("description").asText("transfer_rejected") : "transfer_rejected";
-//                return new TransferResponse(false, null, "FAILED", description);
-//            }
-//
-//            String status = response.path("data").path("status").asText("");
-//            String reference = response.path("data").path("id").asText(request.idempotencyKey());
-//
-//            if ("SUCCESS".equalsIgnoreCase(status)) {
-//                return new TransferResponse(true, reference, status, null);
-//            }
-//            // PENDING/NEW/PENDING_BILLING/REFUND all fall through here —
-//            // DisbursementService branches on TransferResponse.isPending()
-//            // vs isRefunded() vs plain failure to decide what to do next.
-//            return new TransferResponse(false, reference, status,
-//                    "Transfer not confirmed successful (status=" + status + ")");
-//
-//        } catch (NombaApiException e) {
-//            log.error("Bank transfer failed for merchantTxRef={}: {}", request.idempotencyKey(), e.getMessage());
-//            return new TransferResponse(false, null, "FAILED", "Could not reach Nomba: " + e.getMessage());
-//        }
-//    }
     @Override
     public TransferResponse initiateBankTransfer(BankTransferRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -530,6 +492,42 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
         } catch (NombaApiException e) {
             log.error("Refund failed for reference={}: {}", request.originalReference(), e.getMessage());
             return new RefundResponse(false, null, "Could not reach Nomba: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public VirtualAccountResponse createVirtualAccount(VirtualAccountRequest request) {
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("accountRef", request.accountReference());
+            body.put("accountName", request.accountName());
+            body.put("expectedAmount", toMajorUnitsString(request.expectedAmountKobo()));
+            body.put("currency", request.currency());
+            body.put("expiryDate", request.expiryDate());
+
+
+            JsonNode response = apiClient.post("/v1/accounts/virtual/" + properties.getSubAccountId(), body);
+
+            if (!apiClient.isSuccessEnvelope(response)) {
+                log.error("[NOMBA] Virtual account creation failed — ref={} response={}",
+                        request.accountReference(), response);
+                return new VirtualAccountResponse(false, null, null, null, null,
+                        response.path("description").asText("unknown_error"));
+            }
+
+            JsonNode data = response.path("data");
+            return new VirtualAccountResponse(
+                    true,
+                    data.path("accountNumber").asText(),
+                    data.path("bankName").asText(),
+                    data.path("bankCode").asText(),
+                    request.accountReference(),
+                    null
+            );
+        }catch (NombaApiException e){
+            log.error("Virtual account failed for reference={}: {}", request.accountReference(), e.getMessage());
+            return new VirtualAccountResponse(false, null,
+                    "Could not reach Nomba: " + e.getMessage(), null, null, e.getMessage());
         }
     }
 

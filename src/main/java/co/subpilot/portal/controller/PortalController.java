@@ -63,6 +63,15 @@ public class PortalController {
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
 
+
+    // Add a @PostConstruct or just strip inline:
+    private String baseUrl() {
+        return frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
+    }
+// Then use baseUrl() instead of frontendBaseUrl everywhere
+
     // ── View subscription + next billing date ─────────────────────────────────
 
     @GetMapping
@@ -136,7 +145,7 @@ public class PortalController {
                 .map(Invoice::getAmount)
                 .orElse(plan.getAmount());
 
-        String callbackUrl = frontendBaseUrl + "/portal/" + subscriptionToken + "/card-updated";
+        String callbackUrl = baseUrl() + "/portal/" + subscriptionToken + "/card-updated";
 
         NombaPaymentGateway.CheckoutResponse checkout = nomba.initiateCheckout(
                 new NombaPaymentGateway.CheckoutRequest(
