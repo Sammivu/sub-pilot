@@ -516,14 +516,16 @@ public class NombaGatewayImpl implements NombaPaymentGateway {
             }
 
             JsonNode data = response.path("data");
-            return new VirtualAccountResponse(
-                    true,
-                    data.path("accountNumber").asText(),
-                    data.path("bankName").asText(),
-                    data.path("bankCode").asText(),
-                    request.accountReference(),
-                    null
-            );
+            String bankAccountNumber = data.path("bankAccountNumber").asText(null); // ← correct
+            String bankName          = data.path("bankName").asText(null);
+            String bankAccountName   = data.path("bankAccountName").asText(null);   // ← correct
+
+            log.info("[NOMBA] Virtual account created — ref={} accountNumber={} bank={}",
+                    request.accountReference(), bankAccountNumber, bankName);
+
+            return new VirtualAccountResponse(true, bankAccountNumber, bankName,
+                    bankAccountName, request.accountReference(), null);
+
         }catch (NombaApiException e){
             log.error("Virtual account failed for reference={}: {}", request.accountReference(), e.getMessage());
             return new VirtualAccountResponse(false, null,

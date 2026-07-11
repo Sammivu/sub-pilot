@@ -6,12 +6,18 @@ import co.subpilot.refund.dto.RefundDtos;
 import co.subpilot.refund.entity.Refund;
 import co.subpilot.refund.service.RefundService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Replaces the earlier AdminRefundController (guarded by a throwaway
@@ -36,23 +42,68 @@ public class InternalRefundController {
                 .toList();
         return ResponseEntity.ok(refunds);
     }
+    @GetMapping("/all")
+    public ResponseEntity<Page<RefundDtos.AdminRefundResponse>> list(
+            // Filters
+            @RequestParam(defaultValue = "pending_approval") String status,
+            @RequestParam(required = false) String merchantId,
+            @RequestParam(required = false) String resolvedBy,
+            @RequestParam(required = false) String from,   // ISO-8601
+            @RequestParam(required = false) String to,
+            // Pagination
+            @RequestParam(defaultValue = "0")   int page,
+            @RequestParam(defaultValue = "20")  int size,
+            // Sorting
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc")      String sortDir
+    ) {
+        // Whitelist sortable fields to prevent JPQL injection
+        Set<String> allowedSortFields = Set.of(
+                "createdAt", "resolvedAt", "amount", "status", "merchantId"
+        );
+        String safeSort = allowedSortFields.contains(sortBy) ? sortBy : "createdAt";
+
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(safeSort).ascending()
+                : Sort.by(safeSort).descending();
+
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), sort);
+
+        Instant fromInstant = from != null ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null ? Instant.parse(to)   : null;
+
+        return ResponseEntity.ok(refundService.listWithFilters(status, merchantId, resolvedBy,
+                                fromInstant, toInstant, pageable)
+                        .map(RefundDtos.AdminRefundResponse::from)
+        );
+    }
 
     @PostMapping("/{refundId}/approve")
-    public ResponseEntity<RefundDtos.RefundResponse> approve(@PathVariable String refundId) {
+    public ResponseEntity<RefundDtos.RefundResponse> approve(@PathVariable String refundId,
+                                 @RequestHeader(value = "X-Admin-Identity", defaultValue = "unknown") String adminIdentity
+    ) {
         requireSuperAdmin();
-        Refund refund = refundService.approve(refundId);
+        Refund refund = refundService.approve(refundId, adminIdentity);
         return ResponseEntity.ok(RefundDtos.RefundResponse.from(refund));
     }
 
     @PostMapping("/{refundId}/reject")
     public ResponseEntity<RefundDtos.RefundResponse> reject(
             @PathVariable String refundId,
-            @RequestBody(required = false) Map<String, String> body
+            @RequestBody(required = false) Map<String, String> body,
+            @RequestHeader(value = "X-Admin-Identity", defaultValue = "unknown") String adminIdentity
+
     ) {
         requireSuperAdmin();
         String reason = body != null ? body.get("reason") : null;
-        Refund refund = refundService.reject(refundId, reason);
+        Refund refund = refundService.reject(refundId, reason, adminIdentity);
         return ResponseEntity.ok(RefundDtos.RefundResponse.from(refund));
+    }
+
+    // Single refund detail — useful for audit drill-down
+    @GetMapping("/{refundId}")
+    public ResponseEntity<RefundDtos.RefundResponse> get(@PathVariable String refundId) {
+        return ResponseEntity.ok(RefundDtos.RefundResponse.from(refundService.findById(refundId)));
     }
 
     private void requireSuperAdmin() {

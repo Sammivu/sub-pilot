@@ -18,6 +18,8 @@ import co.subpilot.refund.entity.Refund;
 import co.subpilot.refund.repository.RefundRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -132,7 +134,7 @@ public class RefundService {
      * this deliberately does NOT go through TenantContext.
      */
     @Transactional
-    public Refund approve(String refundId) {
+    public Refund approve(String refundId, String adminId) {
         Refund refund = refundRepository.findById(refundId)
                 .orElseThrow(() -> new ResourceNotFoundException("refund", refundId));
 
@@ -160,6 +162,7 @@ public class RefundService {
         if (response.success()) {
             refund.setStatus(RefundStatus.SUCCEEDED);
             refund.setNombaReference(response.reference());
+            refund.setResolvedByAdminId(adminId);
             refund.setResolvedAt(Instant.now());
             refundRepository.save(refund);
 
@@ -201,7 +204,7 @@ public class RefundService {
 
     /** Admin-only — declines a request without ever contacting Nomba. */
     @Transactional
-    public Refund reject(String refundId, String adminReason) {
+    public Refund reject(String refundId, String adminReason, String adminId) {
         Refund refund = refundRepository.findById(refundId)
                 .orElseThrow(() -> new ResourceNotFoundException("refund", refundId));
 
@@ -212,6 +215,7 @@ public class RefundService {
 
         refund.setStatus(RefundStatus.REJECTED);
         refund.setFailureReason(adminReason);
+        refund.setResolvedByAdminId(adminId);
         refund.setResolvedAt(Instant.now());
         refundRepository.save(refund);
 
@@ -225,6 +229,18 @@ public class RefundService {
     /** Admin queue — everything awaiting a decision, across all merchants. */
     public List<Refund> listPendingApproval() {
         return refundRepository.findByStatus(RefundStatus.PENDING_APPROVAL);
+    }
+
+    public Page<Refund> listWithFilters(String status, String merchantId, String resolvedByAdminId, Instant fromDate,
+            Instant toDate, Pageable pageable) {
+        String statusFilter = "all".equalsIgnoreCase(status) ? null : status;
+        return refundRepository.findAllWithFilters(
+                statusFilter, merchantId, resolvedByAdminId,
+                fromDate, toDate, pageable);
+    }
+    public Refund findById(String refundId) {
+        return refundRepository.findById(refundId).orElseThrow(() ->
+                new ResourceNotFoundException("refund", refundId));
     }
 
     public List<Refund> listForInvoice(String invoiceId) {

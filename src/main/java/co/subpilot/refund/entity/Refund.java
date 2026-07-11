@@ -46,6 +46,9 @@ public class Refund extends BaseEntity {
     @Column(name = "reason")
     private String reason;
 
+    @Column(name = "resolved_by_admin_id")
+    private String resolvedByAdminId;
+
     @Column(name = "status", nullable = false)
     @Builder.Default
     private String status = RefundStatus.PENDING;
