@@ -110,7 +110,7 @@ public class DunningTriggerService {
             builder.vaBankName(va.bankName())
                     .vaAccountNumber(va.bankAccountNumber())
                     .vaAccountName(va.bankAccountName())
-                    .vaAccountRef(accountRef);
+                    .vaAccountRef(va.accountReference());
             log.info("Virtual account created for dunning — subscription={} accountNumber={}",
                     sub.getId(), va.bankAccountNumber());
         } else {
