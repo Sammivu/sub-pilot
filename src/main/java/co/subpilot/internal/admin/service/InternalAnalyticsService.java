@@ -44,6 +44,9 @@ public class InternalAnalyticsService {
                 activeSubsCount, newSubsInWindow, totalMerchants
         );
     }
+    private static long asLong(Object value) {
+        return ((Number) value).longValue();
+    }
 
     public List<InternalAdminDtos.MerchantRevenueRow> getMerchantBreakdown(
             Instant from,
@@ -62,7 +65,10 @@ public class InternalAnalyticsService {
                 .stream().collect(Collectors.toMap(Merchant::getId, m -> m));
 
         Map<String, Long> activeCounts = subscriptionRepository.activeCountPerMerchant()
-                .stream().collect(Collectors.toMap(r -> (String) r[0], r -> (Long) r[1]));
+                .stream().collect(Collectors.toMap(
+                        r -> (String) r[0],
+                        r -> asLong(r[1])   // COUNT — was (Long) r[1]
+                ));
 
         Stream<InternalAdminDtos.MerchantRevenueRow> stream = rows.stream()
                 .map(r -> {
@@ -72,10 +78,10 @@ public class InternalAnalyticsService {
                             merchantId,
                             m != null ? m.getBusinessName() : "Unknown",
                             m != null ? m.getStatus() : "unknown",
-                            (Long) r[1],  // gross
-                            (Long) r[2],  // fee
-                            (Long) r[3],  // net
-                            (Long) r[4],  // tx count
+                            asLong(r[1]),   // gross
+                            asLong(r[2]),   // fee
+                            asLong(r[3]),   // net
+                            asLong(r[4]),   // txCount — COUNT, but asLong handles both
                             activeCounts.getOrDefault(merchantId, 0L)
                     );
                 });
@@ -108,9 +114,9 @@ public class InternalAnalyticsService {
     public List<InternalAdminDtos.DailyRevenuePoint> getDailyRevenueSeries(Instant from, Instant to) {
         return feeRepository.dailyRevenueSeries(from, to).stream()
                 .map(r -> new InternalAdminDtos.DailyRevenuePoint(
-                        r[0].toString(),  // day
-                        (Long) r[1],      // subpilot revenue
-                        (Long) r[2]       // gmv
+                        r[0].toString(),
+                        asLong(r[1]),   // subpilot revenue
+                        asLong(r[2])    // gmv
                 )).toList();
     }
 }
