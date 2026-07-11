@@ -2,7 +2,9 @@ package co.subpilot.notification.service;
 
 import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.repository.CustomerRepository;
+import co.subpilot.dunning.entity.DunningExecution;
 import co.subpilot.invoice.entity.Invoice;
+import co.subpilot.invoice.repository.InvoiceRepository;
 import co.subpilot.merchant.entity.Merchant;
 import co.subpilot.merchant.repository.MerchantRepository;
 import co.subpilot.notification.entity.NotificationLog;
@@ -55,6 +57,7 @@ public class NotificationService {
     private final MerchantRepository merchantRepository;
     private final CustomerRepository customerRepository;
     private final PlanRepository planRepository;
+    private final InvoiceRepository invoiceRepository;
 
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
@@ -81,25 +84,50 @@ public class NotificationService {
         });
     }
 
-    public void sendPaymentFailed(Subscription sub, Invoice invoice, String failureReason) {
+    public void sendPaymentFailed(Subscription sub, Invoice invoice, String failureReason, DunningExecution execution) {
         withContext(sub, (customer, plan, merchant) -> {
             Map<String, String> vars = baseVars(customer, plan, merchant);
             vars.put("amount", formatAmount(invoice.getAmount(), invoice.getCurrency()));
             vars.put("failureReason", failureReason != null ? failureReason : "Payment could not be processed.");
             vars.put("selfCureUrl", portalUrl(sub.getSubscriptionToken()));
+            putBankVars(vars, execution);
             send(merchant.getId(), sub.getId(), customer.getEmail(), customer.getFullName(),
                     EmailTemplate.PAYMENT_FAILED, vars);
         });
     }
 
-    public void sendDunningWarning(Subscription sub, int daysRemaining) {
+    public void sendDunningWarning(Subscription sub, int daysRemaining, DunningExecution execution) {
         withContext(sub, (customer, plan, merchant) -> {
             Map<String, String> vars = baseVars(customer, plan, merchant);
             vars.put("daysRemaining", String.valueOf(daysRemaining));
             vars.put("selfCureUrl", portalUrl(sub.getSubscriptionToken()));
+            invoiceRepository.findById(execution.getInvoiceId())
+                    .ifPresent(inv -> vars.put("amount", formatAmount(inv.getAmount(), inv.getCurrency())));
+            putBankVars(vars, execution);
             send(merchant.getId(), sub.getId(), customer.getEmail(), customer.getFullName(),
                     EmailTemplate.DUNNING_WARNING, vars);
         });
+    }
+
+    private void putBankVars(Map<String, String> vars, DunningExecution execution) {
+        if (execution != null && execution.getVaAccountNumber() != null) {
+            vars.put("bankSection", """
+            <p style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;font-size:14px;">
+              <strong>Pay by direct bank transfer:</strong><br>
+              Bank: <strong>%s</strong><br>
+              Account number: <strong>%s</strong><br>
+              Account name: <strong>%s</strong><br>
+              <span style="color:#6b7280;font-size:12px;">Transfer the exact amount shown above.
+              Your subscription will be restored automatically once payment is confirmed.</span>
+            </p>
+            """.formatted(
+                    execution.getVaBankName(),
+                    execution.getVaAccountNumber(),
+                    execution.getVaAccountName()
+            ));
+        } else {
+            vars.put("bankSection", ""); // interpolate() strips this cleanly
+        }
     }
 
     /**

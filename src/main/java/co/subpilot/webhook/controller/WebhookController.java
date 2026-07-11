@@ -562,9 +562,21 @@ public class WebhookController {
         Map<String, Object> transaction = asMap(data.get("transaction"));
         Map<String, Object> tokenizedCardData = asMap(data.get("tokenizedCardData"));
 
-        String orderReference = order != null ? (String) order.get("orderReference") : null;
         String transactionId = transaction != null ? (String) transaction.get("transactionId") : null;
         String cardToken = tokenizedCardData != null ? (String) tokenizedCardData.get("tokenKey") : null;
+
+        String txType = transaction != null ? (String) transaction.get("type") : null;
+
+        if ("vact_transfer".equals(txType)) {
+            // Route by accountRef, not orderReference
+            String accountRef = transaction != null ? (String) transaction.get("accountRef") : null;
+            if (accountRef != null && CheckoutPurpose.isTransfer(accountRef)) {
+                String subscriptionId = CheckoutPurpose.extractSubscriptionId(accountRef);
+                reconciliationService.resolveTransferPayment(subscriptionId, transactionId);
+            }
+            return;
+        }
+        String orderReference = order != null ? (String) order.get("orderReference") : null;
 
         if (orderReference == null) {
             log.warn("Nomba payment_success webhook missing data.order.orderReference — cannot route, ignoring");

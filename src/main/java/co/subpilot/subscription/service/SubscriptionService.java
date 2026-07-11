@@ -7,6 +7,7 @@ import co.subpilot.customer.entity.Customer;
 import co.subpilot.customer.repository.CustomerRepository;
 import co.subpilot.event.EventType;
 import co.subpilot.event.service.EventService;
+import co.subpilot.invoice.repository.InvoiceRepository;
 import co.subpilot.invoice.service.InvoiceService;
 import co.subpilot.nomba.CheckoutPurpose;
 import co.subpilot.nomba.NombaPaymentGateway;
@@ -42,6 +43,7 @@ public class SubscriptionService {
     private final PlanRepository planRepository;
     private final CustomerRepository customerRepository;
     private final InvoiceService invoiceService;
+    private final InvoiceRepository invoiceRepository;
     private final EventService eventService;
     private final NombaPaymentGateway nomba;
     private final NotificationService notificationService;
@@ -49,6 +51,11 @@ public class SubscriptionService {
     @Value("${subpilot.frontend.base-url}")
     private String frontendBaseUrl;
 
+    private String baseUrl() {
+        return frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
+    }
     // ── Public checkout: create subscription from plan page (PRD §6.4) ────────
 
     /**
@@ -90,7 +97,7 @@ public class SubscriptionService {
                 .trialEndsAt(trialEndsAt)
                 .build());
 
-        String callbackUrl = frontendBaseUrl + "/plans/" + req.merchantSlug() + "/" + req.planSlug() + "/success?ref=";
+        String callbackUrl = baseUrl() + "/plans/" + req.merchantSlug() + "/" + req.planSlug() + "/success?ref=";
 
         NombaPaymentGateway.CheckoutResponse checkout = nomba.initiateCheckout(
                 new NombaPaymentGateway.CheckoutRequest(

@@ -103,4 +103,17 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Stri
      */
     @Query("SELECT s FROM Subscription s WHERE s.merchantId = :merchantId AND s.createdAt >= :since ORDER BY s.createdAt ASC")
     List<Subscription> findCreatedSinceOrderByCreatedAtAsc(@Param("merchantId") String merchantId, @Param("since") Instant since);
+
+    // Active subscriber count across all merchants
+    @Query("SELECT COUNT(s) FROM Subscription s WHERE s.status = 'active'")
+    long countAllActive();
+
+    // Per-merchant active count
+    @Query("SELECT s.merchantId, COUNT(s) FROM Subscription s " +
+            "WHERE s.status = 'active' GROUP BY s.merchantId")
+    List<Object[]> activeCountPerMerchant();
+
+    // New subscriptions in window (platform growth)
+    @Query("SELECT COUNT(s) FROM Subscription s WHERE s.createdAt >= :from AND s.createdAt <= :to")
+    long countCreatedBetween(@Param("from") Instant from, @Param("to") Instant to);
 }
