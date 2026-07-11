@@ -17,20 +17,29 @@ public interface RefundRepository extends JpaRepository<Refund, String> {
 
     // TSQ-style reconciliation, mirroring PaymentAttemptRepository's stuck-attempt sweep.
     List<Refund> findByStatus(String status);
-    @Query("""
-    SELECT r FROM Refund r
-    WHERE (:status IS NULL OR r.status = :status)
-      AND (:merchantId IS NULL OR r.merchantId = :merchantId)
-      AND (:resolvedByAdminId IS NULL OR r.resolvedByAdminId = :resolvedByAdminId)
-      AND (:fromDate IS NULL OR r.createdAt >= :fromDate)
-      AND (:toDate IS NULL OR r.createdAt <= :toDate)
-    """)
+    @Query(value = """
+        SELECT * FROM refunds r
+        WHERE (:status IS NULL OR r.status = :status)
+          AND (:merchantId IS NULL OR r.merchant_id = :merchantId)
+          AND (:resolvedByAdminId IS NULL OR r.resolved_by_admin_id = :resolvedByAdminId)
+          AND (CAST(:fromDate AS timestamptz) IS NULL OR r.created_at >= CAST(:fromDate AS timestamptz))
+          AND (CAST(:toDate AS timestamptz) IS NULL OR r.created_at <= CAST(:toDate AS timestamptz))
+        """,
+            countQuery = """
+        SELECT COUNT(*) FROM refunds r
+        WHERE (:status IS NULL OR r.status = :status)
+          AND (:merchantId IS NULL OR r.merchant_id = :merchantId)
+          AND (:resolvedByAdminId IS NULL OR r.resolved_by_admin_id = :resolvedByAdminId)
+          AND (CAST(:fromDate AS timestamptz) IS NULL OR r.created_at >= CAST(:fromDate AS timestamptz))
+          AND (CAST(:toDate AS timestamptz) IS NULL OR r.created_at <= CAST(:toDate AS timestamptz))
+        """,
+            nativeQuery = true)
     Page<Refund> findAllWithFilters(
             @Param("status") String status,
             @Param("merchantId") String merchantId,
             @Param("resolvedByAdminId") String resolvedByAdminId,
-            @Param("fromDate") Instant fromDate,
-            @Param("toDate") Instant toDate,
+            @Param("fromDate") String fromDate,
+            @Param("toDate") String toDate,
             Pageable pageable
     );
 }

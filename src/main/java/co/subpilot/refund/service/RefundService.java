@@ -234,9 +234,11 @@ public class RefundService {
     public Page<Refund> listWithFilters(String status, String merchantId, String resolvedByAdminId, Instant fromDate,
             Instant toDate, Pageable pageable) {
         String statusFilter = "all".equalsIgnoreCase(status) ? null : status;
-        return refundRepository.findAllWithFilters(
-                statusFilter, merchantId, resolvedByAdminId,
-                fromDate, toDate, pageable);
+        return refundRepository.findAllWithFilters(statusFilter, merchantId, resolvedByAdminId,
+                fromDate != null ? fromDate.toString() : null,   // Instant → ISO string Postgres understands
+                toDate   != null ? toDate.toString()   : null,
+                pageable
+        );
     }
     public Refund findById(String refundId) {
         return refundRepository.findById(refundId).orElseThrow(() ->
