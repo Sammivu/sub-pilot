@@ -231,9 +231,9 @@ public interface NombaPaymentGateway {
 
     record VirtualAccountResponse(
             boolean success,
-            String  accountNumber,
+            String  bankAccountNumber,
             String  bankName,
-            String  bankCode,
+            String  bankAccountName,
             String  accountReference,
             String  errorMessage
     ) {}
