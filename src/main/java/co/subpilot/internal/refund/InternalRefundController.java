@@ -44,36 +44,36 @@ public class InternalRefundController {
     }
     @GetMapping("/all")
     public ResponseEntity<Page<RefundDtos.AdminRefundResponse>> list(
-            // Filters
             @RequestParam(defaultValue = "pending_approval") String status,
             @RequestParam(required = false) String merchantId,
             @RequestParam(required = false) String resolvedBy,
-            @RequestParam(required = false) String from,   // ISO-8601
+            @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
-            // Pagination
             @RequestParam(defaultValue = "0")   int page,
             @RequestParam(defaultValue = "20")  int size,
-            // Sorting
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc")      String sortDir
-    ) {
-        // Whitelist sortable fields to prevent JPQL injection
-        Set<String> allowedSortFields = Set.of(
-                "createdAt", "resolvedAt", "amount", "status", "merchantId"
+            @RequestParam(defaultValue = "desc")      String sortDir) {
+        Map<String, String> sortFieldMap = Map.of(
+                "createdAt",  "created_at",
+                "resolvedAt", "resolved_at",
+                "amount",     "amount",
+                "status",     "status",
+                "merchantId", "merchant_id"
         );
-        String safeSort = allowedSortFields.contains(sortBy) ? sortBy : "createdAt";
+
+        String columnName = sortFieldMap.getOrDefault(sortBy, "created_at");
 
         Sort sort = sortDir.equalsIgnoreCase("asc")
-                ? Sort.by(safeSort).ascending()
-                : Sort.by(safeSort).descending();
+                ? Sort.by(columnName).ascending()
+                : Sort.by(columnName).descending();
 
         Pageable pageable = PageRequest.of(page, Math.min(size, 100), sort);
 
         Instant fromInstant = from != null ? Instant.parse(from) : null;
         Instant toInstant   = to   != null ? Instant.parse(to)   : null;
 
-        return ResponseEntity.ok(refundService.listWithFilters(status, merchantId, resolvedBy,
-                                fromInstant, toInstant, pageable)
+        return ResponseEntity.ok(
+                refundService.listWithFilters(status, merchantId, resolvedBy, fromInstant, toInstant, pageable)
                         .map(RefundDtos.AdminRefundResponse::from)
         );
     }
