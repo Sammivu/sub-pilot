@@ -322,7 +322,9 @@ public class DunningTriggerService {
         SubscriptionStateMachine.assertCanTransition(sub.getStatus(), SubscriptionStatus.active);
         sub.setStatus(SubscriptionStatus.active);
         subscriptionRepository.save(sub);
-        invoiceService.markPaid(invoice.getId(), "dunning_recovery");
+        if (!invoice.isPaid()) {   // ← guard so callers that already markPaid don't double-call
+            invoiceService.markPaid(invoice.getId(), "dunning_recovery");
+        }
 
         eventService.emit(sub.getMerchantId(), "dunning.recovered", "subscription",
                 sub.getId(), Map.of("executionId", execution.getId()));
